@@ -149,8 +149,8 @@ def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, j
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs, unk_mask=unk_mask)
                     _, preds = torch.max(outputs, 1)
-
                     # labels = torch.squeeze(labels)
+
                     loss = criterion(outputs, labels)
                     # backward + optimize only if in training phase
                     if phase == 'train':

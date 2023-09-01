@@ -87,7 +87,8 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.fused_attn = use_fused_attn()
+        # self.fused_attn = use_fused_attn()
+        self.fused_attn = False
         self.attn_value = None
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
@@ -104,18 +105,21 @@ class Attention(nn.Module):
         q, k = self.q_norm(q), self.k_norm(k)
 
         if self.fused_attn:
-            x = F.scaled_dot_product_attention(
-                q, k, v,
-                dropout_p=self.attn_drop.p,
-            )
+            # x = F.scaled_dot_product_attention(
+            #     q, k, v,
+            #     dropout_p=self.attn_drop.p,
+            # )
+            attn = torch.softmax((q @ k.transpose(-2, -1) / math.sqrt(q.size(-1))), dim=-1)
+            attn = self.attn_drop(attn)
+            self.attn_value = attn
+            x = attn @ v
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
             attn = attn.softmax(dim=-1)
-            self.attn_value = attn
             attn = self.attn_drop(attn)
+            self.attn_value = attn
             x = attn @ v
-
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
