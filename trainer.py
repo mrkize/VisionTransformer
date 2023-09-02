@@ -53,7 +53,7 @@ def get_dp_model(model, config, opt, data_loader):
     return model, optimizer
 
 
-def rollout(attentions, discard_ratio, head_fusion):
+def rollout(attentions, discard_ratio=0.9, head_fusion="mean"):
     result = torch.eye(attentions[0].size(-1))
     with torch.no_grad():
         for attention in attentions:
@@ -150,6 +150,10 @@ def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, j
                     outputs = model(inputs, unk_mask=unk_mask)
                     _, preds = torch.max(outputs, 1)
                     # labels = torch.squeeze(labels)
+                    attn = []
+                    for block in model.blocks:
+                        attn.append(block.attn.attn_value)
+                    cls_attn = rollout(attn)
 
                     loss = criterion(outputs, labels)
                     # backward + optimize only if in training phase
