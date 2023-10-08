@@ -4,8 +4,7 @@ import tim
 import torch
 import torchvision
 
-from Testtool import gain_data, audit_data, conf
-from trainer import get_dp_model
+# from Testtool import gain_data, audit_data, conf
 from utils import MyConfig
 from atk_models.attack_model import MLP_CE
 from utils.mia.attackTraining import attackTraining
@@ -46,8 +45,8 @@ def parse_option():
                         help='learning rate')
 
     # model dataset
-    parser.add_argument('--model', type=str, default='res')
-    parser.add_argument('--dataset', type=str, default='cifar10',
+    parser.add_argument('--model', type=str, default='orain_mask_0.000')
+    parser.add_argument('--dataset', type=str, default='ImageNet100',
                         help='dataset')
     parser.add_argument('--data_path', type=str, default='data/',
                         help='data_path')
@@ -70,7 +69,7 @@ def parse_option():
                         help="single_label_dataset")
     parser.add_argument('--multi_label_dataset', type=list, default=["UTKFace", "CelebA", "Place365", "Place100", "Place50", "Place20"],
                         help="multi_label_dataset")
-    parser.add_argument('--mia_type', type=str, default="conf",
+    parser.add_argument('--mia_type', type=str, default="metric-based",
                         help="nn-based, lebel-only, metric-based")
     parser.add_argument('--select_posteriors', type=int, default=3,
                         help='how many posteriors we select, if -1, we remains the original setting')
@@ -81,16 +80,6 @@ def parse_option():
     parser.add_argument('--modeldir', type=str, default="", help='None or memGuard')
     parser.add_argument('--valmode', action = "store_true", help='None or memGuard')
     opt = parser.parse_args()
-
-    # model_encoder_dim_dict = {
-    #     "resnet18": 512,
-    #     "resnet50": 2048,
-    #     "alexnet": 4096,
-    #     "vgg16": 4096,
-    #     "vgg11": 4096,
-    #     "mobilenet": 1280,
-    #     "cnn": 512,
-    # }
     dataset_class_dict = {
         "STL10": 10,
         "cifar10": 10,
@@ -106,8 +95,6 @@ def parse_option():
         "Fmnist": 10
     }
     opt.n_class = dataset_class_dict[opt.dataset]
-    # opt.encoder_dim = model_encoder_dim_dict[opt.model]
-
     return opt
 
 
@@ -209,11 +196,11 @@ def load_model(opt, config):
             target_model = ViT_ape.load_VIT(path + '.pth', config)
             shadow_model = ViT_ape.load_VIT(path + '_shadow.pth', config)
         elif 'mask' in opt.model:
-            path = config.path.model_path + opt.model[:8]
+            path = config.path.model_path + opt.model
             target_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
-            target_model.load_state_dict(torch.load(path + opt.model[8:] + '.pth'))
+            target_model.load_state_dict(torch.load(path+ '.pth'))
             shadow_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
-            shadow_model.load_state_dict(torch.load(path + opt.model[8:]+'_shadow' +'.pth'))
+            shadow_model.load_state_dict(torch.load(path +'.pth'))
         else :
             path = config.path.model_path + opt.model
             # target_model = ViT.load_VIT(path + '.pth', config)

@@ -339,19 +339,20 @@ def get_loader(dataset, config, is_target, cif=True, set = 0):
                                nums_per_class=config.patch.nums_per_class,
                                random_seed=config.general.seed,
                                is_target=is_target)
-
         val_set = VITdataset(root_dir=config.path.data_path,
                              split='val',
                              num_class=config.patch.num_classes,
                              nums_per_class=config.patch.nums_per_class,
                              random_seed=config.general.seed,
                              is_target=is_target)
+        # train_set = Subset(train_set, range(1000))
+        # val_set = Subset(val_set, range(1000))
 
     elif dataset == 'cinic10':
         train_set = cinic_dataset(root_dir=config.path.data_path, split='train', is_target=is_target,
-                                  seed=config.general.seed)
+                                  seed=config.general.seed)[:1]
         val_set = cinic_dataset(root_dir=config.path.data_path, split='val', is_target=is_target,
-                                seed=config.general.seed)
+                                seed=config.general.seed)[:1]
     elif dataset == 'ImageNet':
         train_set = imageNet(root_dir=config.path.data_path, split='train',
                              num_class=config.patch.num_classes,

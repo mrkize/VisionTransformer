@@ -13,45 +13,6 @@ import time
 from masking_generator import JigsawPuzzleMaskedRegion
 from mymodel import ViT, ViT_mask, ViT_ape, ViT_mask_avg, Swin, Swin_mask_avg, Swin_mask
 
-class ConfidencePenalty(nn.Module):
-    def __init__(self, criterion, alpha: float = 0.1, reduction='mean'):
-        super().__init__()
-        self.criterion = criterion
-        self.alpha = alpha
-        self.reduction = reduction
-        self.softmax = nn.Softmax(dim=-1)
-        self.logsoftmax = nn.LogSoftmax(dim=-1)
-
-    def forward(self, preds, target):
-        loss = self.criterion(preds, target)
-        probs = self.softmax(preds)
-        logprobs = self.logsoftmax(preds)
-        entropy = self.reduce_loss(torch.mul(probs, logprobs).sum(dim=-1), self.reduction)  # = negated entropy
-        return loss + self.alpha * entropy
-
-    @staticmethod
-    def reduce_loss(loss, reduction='mean'):
-        return loss.mean() if reduction == 'mean' else loss.sum() if reduction == 'sum' else loss
-
-def get_dp_model(model, config, opt, data_loader):
-
-    privacy_engine = PrivacyEngine()
-
-    optimizer = torch.optim.Adam(model.parameters(),
-                                      lr=config.learning.learning_rate,
-                                      betas=(config.learning.beta1, config.learning.beta2),
-                                      weight_decay=config.learning.weight_decay
-                                 )
-
-    model = DPDDP(model)
-    model, optimizer, dt = privacy_engine.make_private(
-        module=model,
-        optimizer=optimizer,
-        data_loader=data_loader['train'],
-        noise_multiplier=0.75,
-        max_grad_norm=1.2)
-    return model, optimizer
-
 
 def rollout(attentions, discard_ratio=0.9, head_fusion="mean"):
     result = torch.eye(attentions[0].size(-1))
@@ -67,25 +28,34 @@ def rollout(attentions, discard_ratio=0.9, head_fusion="mean"):
                 raise "Attention head fusion type Not supported"
             # Drop the lowest attentions, but
             # don't drop the class token
-            flat = attention_heads_fused.view(attention_heads_fused.size(0), -1)
-            _, indices = flat.topk(int(flat.size(-1) * discard_ratio), -1, False)
-            indices = indices[indices != 0]
-            flat[0, indices] = 0
+            flat = attention_heads_fused.view(attention_heads_fused.size(0), -1)    #(128,197,197) -> (128, 38809)
+            _, indices = flat[:,1:].topk(int(flat.size(-1) * discard_ratio), -1, False)
+            indices = indices + torch.ones(indices.shape).to(indices.device)
+            indices = indices.to(torch.int64)
+            flat.scatter_(1, indices, 0)
 
-            I = torch.eye(attention_heads_fused.size(-1))
+            I = torch.eye(attention_heads_fused.size(-1)).to(attention_heads_fused.device)
             a = (attention_heads_fused + 1.0 * I) / 2
 
             a = a / a.sum(dim=-1)[..., None]
 
-            result = torch.matmul(a, result)
+            result = torch.matmul(a, result.to(attention_heads_fused.device))
 
     return result[:, 0, 1:]
 
+def calculate_entropy(heatmap, epsilon = 1e-8):
+    heatmap = heatmap + epsilon
 
-def predict(model, dataloaders, dataset_sizes, device):
+    probabilities = heatmap / heatmap.sum(-1)[...,None]
+    entropy = -torch.sum(probabilities * torch.log2(probabilities), dim=-1)
+    # torch.nonzero(torch.isnan(probabilities))
+    return entropy
+
+def predict(model, dataloaders, dataset_sizes, device, is_img=False):
     model.to(device)
     model.eval()  # Set model to evaluate mode
     running_corrects = 0
+    attn_metric = []
     # Iterate over data.
     for batch_idx, (data, target) in enumerate(dataloaders):
         inputs, labels = data.to(device), target.to(device)
@@ -93,10 +63,18 @@ def predict(model, dataloaders, dataset_sizes, device):
             outputs = model(inputs)
             _, preds = torch.max(outputs, 1)
             labels = torch.squeeze(labels)
+            attn = []
+            for block in model.blocks:
+                attn.append(block.attn.attn_value)
+            cls_attn = rollout(attn)
+            cls_attn = cls_attn/cls_attn.max(-1)[0][...,None]
+
+            attn_metric.append(calculate_entropy(cls_attn).sum(0))
         running_corrects += preds.eq(labels).sum().item()
     acc = 1.0 * running_corrects / dataset_sizes
-    print("acc:{:.3f}".format(acc))
-    return acc
+    print("acc:{:.5f}".format(acc))
+    print("attn entropy:{:.5f}".format(sum(attn_metric)/dataset_sizes))
+    return acc, sum(attn_metric)/dataset_sizes
 
 
 def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, jigsaw_pullzer, config, opt):
@@ -150,11 +128,6 @@ def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, j
                     outputs = model(inputs, unk_mask=unk_mask)
                     _, preds = torch.max(outputs, 1)
                     # labels = torch.squeeze(labels)
-                    attn = []
-                    for block in model.blocks:
-                        attn.append(block.attn.attn_value)
-                    cls_attn = rollout(attn)
-
                     loss = criterion(outputs, labels)
                     # backward + optimize only if in training phase
                     if phase == 'train':
@@ -212,7 +185,7 @@ def mask_train_model(model_type, opt, config, data_loader, data_size, is_target 
             mixup_alpha=config.general.mixup_alpha,
             # cutmix_alpha=config.general.cutmix_alpha,
             num_classes=config.patch.num_classes)
-        criterion = SoftTargetCrossEntropy()
+        criterion = timm.loss.SoftTargetCrossEntropy()
     jigsaw_pullzer = JigsawPuzzleMaskedRegion(img_size=config.patch.image_size,
                                               patch_size=config.patch.patch_size,
                                               num_masking_patches=int(opt.nums),

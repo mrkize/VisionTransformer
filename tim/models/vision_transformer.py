@@ -629,9 +629,10 @@ class VisionTransformer(nn.Module):
                 exp_seq = seq_ord * (1 - unk_mask)
                 posemb[:, dsc_seq.squeeze(0), :] = pos_embedding[:, dsc_seq.squeeze(0), :] * scale.to(x.device)
                 posemb[:, exp_seq.squeeze(0), :] = pos_embedding[:, exp_seq.squeeze(0), :] / scale.to(x.device)
-
                 pos_embedding = posemb
 
+        if self.train_method == 'no_pos':
+            pos_embedding = self.pos_embed[:,-1,:].unsqueeze(1)
         if self.PE:
             x = x + pos_embedding
         return self.pos_drop(x)
@@ -686,6 +687,7 @@ class VisionTransformer(nn.Module):
         return tuple(outputs)
 
     def forward_features(self, x, unk_mask):
+
         x = self.patch_embed(x)
         x = self._pos_embed(x, unk_mask)
         x = self.patch_drop(x)

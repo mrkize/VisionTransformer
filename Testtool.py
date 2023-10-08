@@ -1,149 +1,115 @@
-import math
-import time
+import argparse
+import os.path
+import sys
 
+import timm
 import torch
-import torchvision
-from torch import nn
+from PIL import Image
+from torchvision import transforms, datasets
+import numpy as np
+import cv2
+import tim
+import dataloader
+from vit_rollout import VITAttentionRollout
+from vit_grad_rollout import VITAttentionGradRollout
+from dataloader import get_loader
+from utils import MyConfig
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--use_cuda', action='store_true', default=True,
+                        help='Use NVIDIA GPU acceleration')
+    parser.add_argument('--image', type=str, default='0_test_1.JPEG',
+                        help='Input image path')
+    parser.add_argument('--head_fusion', type=str, default='max',
+                        help='How to fuse the attention heads for attention rollout. \
+                        Can be mean/max/min')
+    parser.add_argument('--discard_ratio', type=float, default=0.9,
+                        help='How many of the lowest 14x14 attention paths should we discard')
+    parser.add_argument('--category_index', type=int, default=None,
+                        help='The category index for gradient rollout')
+    args = parser.parse_args()
+    args.use_cuda = args.use_cuda and torch.cuda.is_available()
+    return args
+
+def show_mask_on_image(img, mask):
+    img = np.float32(img) / 255
+    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+    heatmap = np.float32(heatmap) / 255
+    cam = heatmap + np.float32(img)
+    cam = cam / np.max(cam)
+    return np.uint8(255 * cam)
+
+def write_img(img, mask, path):
+    np_img = np.array(img)[:, :, ::-1]
+    mask = cv2.resize(mask, (np_img.shape[1], np_img.shape[0]))
+    mask = show_mask_on_image(np_img, mask)
+    cv2.imwrite(path, mask)
+
+model_name = ["orain_mask_0.000.pth", "orain_mask_exchg_0.000.pth", "orain_mask_0.138.pth", "orain_mask_0.276.pth", "orain_mask_0.551.pth", "orain_mask_1.000.pth"]
+test_dir = "../data/ImageNet100/test/"
+save_path = "./attn_heat/"
+plot_number = 1
+for modn in model_name:
+    args = get_args()
+    print(modn)
+    args.image_path = './examples/' + args.image
+    # model = timm.create_model('vit_small_patch16_224', num_classes=1000, attn_drop_rate=0.1)
+    model = tim.create_model('vit_small_patch16_224', num_classes=100)
+    model_path = "./Network/VIT_Model_ImageNet100/" + modn
+    model.load_state_dict(torch.load(model_path))
+    # model.PE = False
+    # model.train()
+
+    if args.use_cuda:
+        model = model.cuda()
+
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+    ])
+    # img = Image.open(args.image_path)
+    # img = img.resize((224, 224))
+    # input_tensor = transform(img).unsqueeze(0)
+
+    # config = MyConfig.MyConfig(path="config/ImageNet100/")
+    # config.set_subkey('learning', 'DDP', False)
+    # config.set_subkey('learning', 'batch_size', 128)
+    # Transform = transforms.Compose([transforms.Resize([224, 224]),
+    #                                 # transforms.RandomHorizontalFlip(),
+    #                                 transforms.ToTensor(),
+    #                                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+    # set1 = datasets.ImageFolder(test_dir, Transform)
+
+    for i in range(3002,6000,100):
+        # for q in range(i,i+100):
+        #     img = Image.open(set1.imgs[q][0])
+        #     if len(img.mode) ==3:
+        #         break
+        #
+        # img = img.resize((224, 224))
+        # input_tensor = transform(img).unsqueeze(0)
+        img = Image.open(args.image_path)
+        img = img.resize((224, 224))
+        input_tensor = transform(img).unsqueeze(0)
+        mean = 0.0
+        std = 0.1
+        noise = torch.randn_like([]) * std + mean
+
+        if args.use_cuda:
+            input_tensor = input_tensor.cuda()
+
+        attention_rollout = VITAttentionRollout(model, head_fusion=args.head_fusion,
+            discard_ratio=args.discard_ratio)
+        mask = attention_rollout(input_tensor)
+
+        name = "/{}_{:.3f}_{}.png".format(modn, args.discard_ratio, args.head_fusion)
+        # for i in range(input_tensor.shape[0]):
+        path = "{}img{}".format(save_path,i)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        write_img(img, mask, "1.png")
 
 
-def gain_data(target_model, shadow_model, target_loader, target_size, shadow_loader, shadow_size, withPE, config, device):
-    target_mem = []
-    shadow_mem = []
-    patches_to_im = torch.nn.Fold(
-        output_size=(config.patch.fold_size, config.patch.fold_size),
-        kernel_size=(config.patch.fold_patch_size, config.patch.fold_patch_size),
-        stride=config.patch.fold_patch_size
-    )
-
-    if config.learning.DP:
-        target_model = target_model.module
-        shadow_model = shadow_model.module
-    target_patch_emb = target_model.to_patch_embedding.to(device).requires_grad_(False)
-    shadow_patch_emb = shadow_model.to_patch_embedding.to(device).requires_grad_(False)
-    target_PE = target_model.pos_embedding.detach().to(device)
-    shadow_PE = shadow_model.pos_embedding.detach().to(device)
-    for idx, phase in enumerate(['val', 'train']):
-        for batch_idx, (data, target) in enumerate(target_loader[phase]):
-            inputs, labels = data.to(device), target.to(device)
-            outputs = target_patch_emb(inputs)
-            if withPE:
-                outputs += target_PE[1:target_patch_emb.num_patches+1]
-            outputs = patches_to_im(outputs.transpose(1, 2))
-            for i in range(len(outputs)):
-                target_mem.append([outputs[i], idx])
-        for batch_idx, (data, target) in enumerate(shadow_loader[phase]):
-            inputs, labels = data.to(device), target.to(device)
-            outputs = shadow_patch_emb(inputs)
-            if withPE:
-                outputs += shadow_PE[1:shadow_patch_emb.num_patches+1]
-            outputs = patches_to_im(outputs.transpose(1, 2))
-            for i in range(len(outputs)):
-                shadow_mem.append([outputs[i], idx])
-    target_mem_loader = torch.utils.data.DataLoader(target_mem,
-                                                    batch_size=config.learning.batch_size,
-                                                    shuffle=True,
-                                                    # num_workers=config.general.num_workers
-                                                    )
-    shadow_mem_loader = torch.utils.data.DataLoader(shadow_mem,
-                                                    batch_size=config.learning.batch_size,
-                                                    shuffle=True,
-                                                    # num_workers=config.general.num_workers
-                                                    )
-    atk_loader = {'train': shadow_mem_loader, 'val': target_mem_loader}
-    atk_size = {'train': shadow_size['train']+shadow_size['val'] , 'val': target_size['train']+target_size['val']}
-    return atk_loader, atk_size
 
 
-def audit_data(atk_loader, atk_size, config, device):
-
-    atk_model = torchvision.models.resnet18(pretrained=False)
-    num_ftrs = atk_model.fc.in_features
-    atk_model.fc = torch.nn.Linear(num_ftrs, 2)
-    atk_model = atk_model.to(device)
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(atk_model.parameters(), lr=config.learning.atk_learning_rate,momentum=config.learning.momentum)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.learning.atk_epochs, eta_min=config.learning.min_lr)
-    best_acc = 0
-    since = time.time()
-    for epoch in range(config.learning.atk_epochs):
-        print('Epoch {}/{}'.format(epoch, config.learning.atk_epochs - 1))
-        for phase in ['train', 'val']:
-            if phase == 'train':
-                atk_model.train()  # Set model to training mode
-                scheduler.step()
-            else:
-                atk_model.eval()   # Set model to evaluate mode
-            running_loss = 0.0
-            running_corrects = 0
-            # Iterate over data.
-            for batch_idx, (data, target) in enumerate(atk_loader[phase]):
-                inputs, labels = data.to(device), target.to(device)
-                optimizer.zero_grad()
-                with torch.set_grad_enabled(phase == 'train'):
-                    outputs = atk_model(inputs)
-                    _, preds = torch.max(outputs, 1)
-                    labels = torch.squeeze(labels)
-                    loss = criterion(outputs, labels)
-                    # backward + optimize only if in training phase
-                    if phase == 'train':
-                        loss.backward()
-                        optimizer.step()
-                # statistics
-                running_loss += loss.item() * inputs.size(0)
-                running_corrects += preds.eq(target.to(device)).sum().item()
-            epoch_loss = running_loss / atk_size[phase]
-            epoch_acc = 1.0 * running_corrects / atk_size[phase]
-            if phase == 'train':
-                print('train acc:{:.3f}'.format(epoch_acc), end=' ')
-            else:
-                print('val acc:{:.3f}'.format(epoch_acc))
-            if phase != 'train' and epoch_acc > best_acc:
-                best_acc = epoch_acc
-    time_elapsed = time.time() - since
-    print("best acc:{:.3f}".format(best_acc))
-    print('Training complete in {:.0f}m {:.0f}s'.format(
-        time_elapsed // 60, time_elapsed % 60))
-
-    return epoch_acc, best_acc
-
-def conf(target_model, loader, device):
-    target_model.eval()  # Set model to evaluate mode
-    maxlist = []
-    # Iterate over data.
-    for batch_idx, (data, target) in enumerate(loader):
-        inputs, labels = data.to(device), target.to(device)
-        outputs = torch.nn.functional.softmax(target_model(inputs),dim=1)
-        out, preds = torch.max(outputs, 1)
-        maxlist.append(out.cpu().detach())
-        # max = out.max(0)[0]
-        # min = out.min(0)[0]
-        # if max>max_conf:
-        #     max_conf = max
-        # if min<min_conf:
-        #     min_conf = min
-    # print("min_conf:{} max_conf:{}".format(min_conf, max_conf))
-    max = torch.cat(maxlist, dim=0)
-    mean, var = max.mean(), max.var()
-    print("mean:{} var:{}".format(max.mean(), max.var()))
-    return mean, var
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(
-            0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)
-        self.register_buffer('pe', pe)
-
-    def forward(self, x):
-        """
-        x: [seq_len, batch_size, d_model]
-        """
-        x = x + self.pe[0,:x.size(1), :]
-        return self.dropout(x)
