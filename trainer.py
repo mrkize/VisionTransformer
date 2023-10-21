@@ -77,16 +77,30 @@ def predict(model, dataloaders, dataset_sizes, device, is_img=False):
     return acc, sum(attn_metric)/dataset_sizes
 
 
+
+def switch_fused_attn(model):
+    for name, block in model.blocks.named_children():
+        block.attn.fused_attn =True
+    return model
+
+
+def get_mask(nums, size):
+    mask = np.zeros([1,size],dtype=int)
+    idx = list(range(1, size))
+    np.random.shuffle(idx)
+    mask[:,idx[:nums]] = 1
+    return mask
+
+
 def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, jigsaw_pullzer, config, opt):
     print("DATASET SIZE", size)
     val_criterion = nn.CrossEntropyLoss()
     since = time.time()
-    #save the best model
     ret_value = np.zeros((4, config.learning.epochs))
     # print(optimizer.state_dict()['param_groups'][0]['lr'])
     #print('-' * 10)
     # print(config.learning.epochs)
-
+    switch_fused_attn(model.module if config.learning.DP else model)
     for epoch in range(config.learning.epochs):
         if opt.local_rank == 0:
             print('Epoch {}/{}'.format(epoch, config.learning.epochs - 1))
@@ -97,14 +111,8 @@ def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, j
                     loader[phase].sampler.set_epoch(epoch)
                 model.train()  # Set model to training mode
                 scheduler.step()
-            # elif epoch%5 != 0 and epoch != num_epochs-1:
-            #     continue   #every 5 epoch execute once
             else:
-            #     if config.learning.val_epoch:
-            #         if (epoch+1)%5 != 0:
-            #             print('\n')
-            #             continue
-                model.eval()   # Set model to evaluate mode
+                model.eval()
             running_loss = 0.0
             running_corrects = 0
             # Iterate over data.
@@ -114,8 +122,8 @@ def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, j
                 if phase == 'train':
                     if mixup_fn is not None:
                         inputs, labels = mixup_fn(inputs, labels)
-                    if epoch >= config.mask.warmup_epoch and torch.rand(1) > config.mask.jigsaw and opt.mask_ratio != 0:
-                        inputs, unk_mask = jigsaw_pullzer(inputs)
+                    if epoch >= config.mask.warmup_epoch:
+                        unk_mask = get_mask(opt.nums, 197)
                         if unk_mask is not None:
                             unk_mask = torch.from_numpy(unk_mask).long().to(opt.device)
                 else:
@@ -176,11 +184,11 @@ def mask_train_model(model_type, opt, config, data_loader, data_size, is_target 
         # print('lr:',config.learning.learning_rate)
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[opt.local_rank], output_device=opt.local_rank, find_unused_parameters=True)
     elif config.learning.DP:
-        model=torch.nn.DataParallel(model, device_ids=[0,1])
+        model=torch.nn.DataParallel(model, device_ids=[0,1], output_device=opt.device)
 
     criterion = nn.CrossEntropyLoss()
     mixup_fn = None
-    if opt.defence == 'label_smoothing':
+    if opt.defence == "label_smoothing":
         mixup_fn = Mixup(
             mixup_alpha=config.general.mixup_alpha,
             # cutmix_alpha=config.general.cutmix_alpha,

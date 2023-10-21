@@ -77,10 +77,13 @@ class VITAttentionRollout:
     def get_attention(self, module, input, output):
         self.attentions.append(output)
 
-    def __call__(self, input_tensor):
+    def __call__(self, input_tensor, ret_out=False):
         self.attentions = []
         with torch.no_grad():
             output = self.model.forward_features(input_tensor, None)
             # print(torch.topk(torch.nn.functional.softmax(output,dim=-1), 5))
-        return rollout(self.attentions, self.discard_ratio, self.head_fusion)
+        if ret_out:
+            return output[:,0,:]
+        else:
+            return rollout(self.attentions, self.discard_ratio, self.head_fusion)
         # return  torch.stack(self.attentions).mean(2).numpy(), 0

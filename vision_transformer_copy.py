@@ -48,6 +48,26 @@ __all__ = ['VisionTransformer']  # model_registry will add each entrypoint fn to
 
 _logger = logging.getLogger(__name__)
 
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(
+            0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        """
+        x: [seq_len, batch_size, d_model]
+        """
+        x = x + self.pe[0,:x.size(1), :]
+        return self.dropout(x)
 
 class Attention(nn.Module):
     fused_attn: Final[bool]
@@ -61,7 +81,6 @@ class Attention(nn.Module):
             attn_drop=0.,
             proj_drop=0.,
             norm_layer=nn.LayerNorm,
-            fuse_attn=False,
     ):
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
@@ -70,6 +89,7 @@ class Attention(nn.Module):
         self.scale = self.head_dim ** -0.5
         # self.fused_attn = use_fused_attn()
         self.fused_attn = False
+        # self.attn_value = None
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -85,18 +105,21 @@ class Attention(nn.Module):
         q, k = self.q_norm(q), self.k_norm(k)
 
         if self.fused_attn:
-            x = F.scaled_dot_product_attention(
-                q, k, v,
-                dropout_p=self.attn_drop.p,
-            )
-
+            # x = F.scaled_dot_product_attention(
+            #     q, k, v,
+            #     dropout_p=self.attn_drop.p,
+            # )
+            attn = torch.softmax((q @ k.transpose(-2, -1) / math.sqrt(q.size(-1))), dim=-1)
+            attn = self.attn_drop(attn)
+            # self.attn_value = attn
+            x = attn @ v
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
+            # self.attn_value = attn
             x = attn @ v
-
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
@@ -104,7 +127,7 @@ class Attention(nn.Module):
 
 
 class LayerScale(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False):
+    def __init__(self, dim, init_values = 1e-5, inplace = False):
         super().__init__()
         self.inplace = inplace
         self.gamma = nn.Parameter(init_values * torch.ones(dim))
@@ -258,6 +281,8 @@ class ParallelScalingBlock(nn.Module):
 
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.attn = None
+
         self.attn_drop = nn.Dropout(attn_drop)
         self.attn_out_proj = nn.Linear(dim, dim)
 
@@ -468,7 +493,14 @@ class VisionTransformer(nn.Module):
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
         embed_len = num_patches if no_embed_class else num_patches + self.num_prefix_tokens
-        self.pos_embed = nn.Parameter(torch.randn(1, embed_len+1, embed_dim) * .02)
+        self.pos_embed = nn.Parameter(torch.randn(1, embed_len + 1, embed_dim) * .02)
+        self.PE = True
+        self.train_method = 'mask'
+        self.scale = [0.2, 0.8]
+        self.ape = False
+        self.abs_pe = PositionalEncoding(embed_dim).pe[:,:num_patches+1,:]
+        self.sigma = 20
+
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
         if patch_drop_rate > 0:
             self.patch_drop = PatchDropout(
@@ -479,8 +511,8 @@ class VisionTransformer(nn.Module):
             self.patch_drop = nn.Identity()
         self.norm_pre = norm_layer(embed_dim) if pre_norm else nn.Identity()
 
-        self.fuse_attn = False
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        # print(block_fn)
         self.blocks = nn.Sequential(*[
             block_fn(
                 dim=embed_dim,
@@ -550,13 +582,59 @@ class VisionTransformer(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def _pos_embed(self, x, unk_mask=None):
-        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
-        pos_embedding = self.pos_embed[:, :-1, :]
+        if self.cls_token is not None:
+            x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+
+        pos_embedding = self.pos_embed[:,:-1,:]
+        if self.ape:
+            pos_embedding = self.abs_pe.to(x.device)
         if unk_mask is not None:
-            seq_ord = torch.arange(x.size(1)).unsqueeze(0).to(x.device)
-            seq_ord = seq_ord * (1 - unk_mask) + unk_mask * self.unk_embed_index
-            pos_embedding = self.pos_embed[:, seq_ord.squeeze(0), :]
-        x = x + pos_embedding
+            if self.train_method == 'mask':
+                seq_ord = torch.arange(x.size(1)).unsqueeze(0).to(x.device)
+                seq_ord = seq_ord * (1 - unk_mask) + unk_mask * self.unk_embed_index
+                pos_embedding = self.pos_embed[:,seq_ord.squeeze(0),:]
+
+
+            elif self.train_method == 'zero':
+                seq_ord = torch.arange(x.size(1)).unsqueeze(0).to(x.device)
+                seq_ord = seq_ord * (1 - unk_mask) + unk_mask * self.unk_embed_index
+                pos = torch.cat([pos_embedding, torch.zeros(1, 1, self.embed_dim).to(x.device)], dim=1)
+                pos_embedding = pos[:,seq_ord.squeeze(0),:]
+
+            elif self.train_method == 'repeat':
+                seq_ord = torch.arange(x.size(1)).unsqueeze(0).to(x.device)
+                unmask_idx = torch.nonzero((1 - unk_mask).squeeze(0)).squeeze(1)
+                avg_pos = pos_embedding[:,unmask_idx[1:],:].mean(1).unsqueeze(1)
+                seq_ord = seq_ord * (1 - unk_mask) + unk_mask * self.unk_embed_index
+                pos = torch.cat([pos_embedding, avg_pos], dim=1)
+                pos_embedding = pos[:,seq_ord.squeeze(0),:]
+
+            elif self.train_method == 'exchange':
+                seq_ord = torch.arange(x.size(1)).to(x.device)
+                mask_idx = torch.nonzero(unk_mask.squeeze(0)).squeeze(1)
+                shf_mask_idx = mask_idx[torch.randperm(mask_idx.shape[0])]
+                seq_ord[mask_idx] = seq_ord[shf_mask_idx]
+                pos_embedding = self.pos_embed[:,seq_ord,:]
+
+            elif self.train_method == 'noise':
+                noise = torch.randn(1, 1, x.shape[2])* .02
+                mask_idx = torch.nonzero(unk_mask.squeeze(0)).squeeze(1)
+                pos_embedding[:,mask_idx,:] = pos_embedding[:,mask_idx,:] + noise.to(x.device)
+
+            elif self.train_method == 'scale':
+                posemb = torch.randn(pos_embedding.shape).to(x.device)
+                scale = torch.rand(1) * (self.scale[1] - self.scale[0]) + self.scale[0]
+                seq_ord = torch.arange(x.size(1)).unsqueeze(0).to(x.device)
+                dsc_seq = seq_ord * unk_mask
+                exp_seq = seq_ord * (1 - unk_mask)
+                posemb[:, dsc_seq.squeeze(0), :] = pos_embedding[:, dsc_seq.squeeze(0), :] * scale.to(x.device)
+                posemb[:, exp_seq.squeeze(0), :] = pos_embedding[:, exp_seq.squeeze(0), :] / scale.to(x.device)
+                pos_embedding = posemb
+
+        if self.train_method == 'no_pos':
+            pos_embedding = self.pos_embed[:,-1,:].unsqueeze(1)
+        if self.PE:
+            x = x + pos_embedding
         return self.pos_drop(x)
 
     def _intermediate_layers(
@@ -608,7 +686,8 @@ class VisionTransformer(nn.Module):
             return tuple(zip(outputs, class_tokens))
         return tuple(outputs)
 
-    def forward_features(self, x, unk_mask=None):
+    def forward_features(self, x, unk_mask):
+
         x = self.patch_embed(x)
         x = self._pos_embed(x, unk_mask)
         x = self.patch_drop(x)
@@ -627,9 +706,10 @@ class VisionTransformer(nn.Module):
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
-    def forward(self, x, unk_mask = None):
+    def forward(self, x, unk_mask=None):
         x = self.forward_features(x, unk_mask)
-        x = self.forward_head(x)
+        x = self.forward_head(x)  #N×197
+        #取attention值中的topk，余下的
         return x
 
 

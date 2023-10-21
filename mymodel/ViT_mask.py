@@ -161,7 +161,7 @@ class VIT(nn.Module):
             if self.train_method == 'mask':
                 seq_ord = torch.arange(x.size(1)).unsqueeze(0).to(x.device)
                 seq_ord = seq_ord * (1 - unk_mask) + unk_mask * self.unk_embed_index
-                pos_embedding = self.pos_embed[:,seq_ord.squeeze(0),:]
+                pos_embedding = self.pos_embedding[:,seq_ord.squeeze(0),:]
 
             elif self.train_method == 'zero':
                 seq_ord = torch.arange(x.size(1)).unsqueeze(0).to(x.device)

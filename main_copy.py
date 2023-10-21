@@ -30,14 +30,14 @@ def get_opt():
     parser.add_argument("--local-rank", type=int, default=0, help="number of cpu threads to use during batch generation")
     parser.add_argument("--defence", type=str, default='label_smoothing', help="defence method")
     parser.add_argument("--istarget", action="store_false", help="defence method")
-    parser.add_argument('--gpu', type=str, default='cuda:0', help='if fill')
+    parser.add_argument('--gpu', type=str, default='cuda:1', help='if fill')
     opt = parser.parse_args()
     return opt
 
 
 def masked_train(model_type):
-    data_loader, data_size = get_loader(opt.dataset, config, is_target=True)
-    mask_train_model(model_type, opt, config, data_loader, data_size)
+    # data_loader, data_size = get_loader(opt.dataset, config, is_target=True)
+    # mask_train_model(model_type, opt, config, data_loader, data_size)
     data_loader, data_size = get_loader(opt.dataset, config, is_target=False)
     mask_train_model(model_type, opt, config, data_loader, data_size, is_target=False)
 
@@ -153,14 +153,14 @@ config_dict = {'cifar10': "config/cifar10/",
 opt = get_opt()
 opt.n_class = dataset_class_dict[opt.dataset]
 opt.mix_up = False
-# torch.random.manual_seed(1001)
+# torch.random.manual_seed(3407)
 config_path = config_dict[opt.dataset]
 config = MyConfig.MyConfig(path=config_path)
 opt.device = gpu_init(opt)
 get_model_name(opt)
 if opt.dataset == 'ImageNet100' and opt.set == 2:
     opt.model_type = opt.model_type + '_exchg'
-# config.set_subkey('learning', 'epochs', 40)
+config.set_subkey('learning', 'epochs', 40)
 print(opt.nums)
 config.set_subkey('patch', 'num_masking_patches', opt.nums)
 config.set_subkey('mask', 'mask_ratio', opt.nums / config.patch.num_patches)

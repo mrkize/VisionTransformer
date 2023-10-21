@@ -36,22 +36,30 @@ def public_data(root_dir, img_size=224, patch_size=16, length = 256, random_seed
     data = im_to_patches(data)
     return data
 
-def data_spilt(dataset, num_class, nums_per_class, is_target=True, seed=101):
-    idx = list(range(int(len(dataset)/num_class)))
+
+sp_num = 2
+
+
+def data_split(dataset, num_class, nums_per_class, istarget, seed=101):
     np.random.seed(seed)
+    idx = list(range(nums_per_class))
     np.random.shuffle(idx)
-    idx_train = np.array(idx)[:nums_per_class] if is_target else np.array(idx)[-nums_per_class:]
-    idx_val = np.array(idx)[nums_per_class:] if is_target else np.array(idx)[:-nums_per_class]
-    index_train = []
-    index_val = []
+    if istarget:
+        idx_1 = np.array(idx)[:int(nums_per_class / 4)]
+        idx_2 = np.array(idx)[int(nums_per_class / 4):int(nums_per_class / 4)*2]
+    else:
+        idx_1 = np.array(idx)[int(nums_per_class / 4)*2:int(nums_per_class / 4)*3]
+        idx_2 = np.array(idx)[int(nums_per_class / 4)*3:]
+    index_1 = []
+    index_2 = []
     for i in range(num_class):
-        index_train += idx_train.tolist()
-        idx_train += nums_per_class
-        index_val += idx_val.tolist()
-        idx_val += nums_per_class
-    train_set = Subset(dataset, index_train)
-    val_set = Subset(dataset, index_val)
-    return train_set, val_set
+        index_1 += idx_1.tolist()
+        idx_1 += nums_per_class
+        index_2 += idx_2.tolist()
+        idx_2 += nums_per_class
+    set_1 = Subset(dataset, index_1)
+    set_2 = Subset(dataset, index_2)
+    return set_1, set_2
 
 
 
@@ -61,7 +69,7 @@ def dataset_split(dataset, num_class, nums_1, num_2, seed=101):
     idx = list(range(nums_per_class))
     np.random.shuffle(idx)
     idx_1 = np.array(idx)[:int(nums_1)]
-    idx_2 = np.array(idx)[int(nums_1):]
+    idx_2 = np.array(idx)[int(nums_1):nums_1+num_2]
     index_1 = []
     index_2 = []
     for i in range(num_class):
@@ -73,12 +81,18 @@ def dataset_split(dataset, num_class, nums_1, num_2, seed=101):
     set_2 = Subset(dataset, index_2)
     return set_1, set_2
 
-def dataset_split_2(dataset, num_class, nums_per_class, seed=101):
+sp_num = 2
+#seed = 101
+def dataset_split_2(dataset, num_class, nums_per_class, istarget, seed=101):
     np.random.seed(seed)
     idx = list(range(nums_per_class))
     np.random.shuffle(idx)
     idx_1 = np.array(idx)[:int(nums_per_class / 2)]
-    idx_2 = np.array(idx)[int(nums_per_class / 2):]
+    idx_2 = np.array(idx)[int(nums_per_class / 2):int(nums_per_class / 2)*2]
+    if istarget:
+        id = idx_1
+        idx_1 = idx_2
+        idx_2 = id
     index_1 = []
     index_2 = []
     for i in range(num_class):
@@ -89,6 +103,29 @@ def dataset_split_2(dataset, num_class, nums_per_class, seed=101):
     set_1 = Subset(dataset, index_1)
     set_2 = Subset(dataset, index_2)
     return set_1, set_2
+
+
+class VVITdataset(Dataset):
+    def __init__(self, root_dir, split, num_class, nums_per_class,random_seed = 1001, is_target=True):
+        self.Transform = transforms.Compose([transforms.Resize([image_size, image_size]),
+                                             # transforms.RandomHorizontalFlip(),
+                                             transforms.ToTensor(),
+                                             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+        self.data_dir = root_dir
+        self.dataset = datasets.ImageFolder(self.data_dir+'train', self.Transform) + datasets.ImageFolder(self.data_dir+'val', self.Transform)
+        train_set_1, train_set_2 = dataset_split_2(datasets.ImageFolder(self.data_dir+'train', self.Transform), num_class, nums_per_class[0], is_target, random_seed)
+        val_set_1, val_set_2 = dataset_split_2(datasets.ImageFolder(self.data_dir+'val', self.Transform), num_class, nums_per_class[1], is_target, random_seed)
+        if split == 'val':
+            self.dataset = train_set_1 + val_set_1
+        else:
+            self.dataset = train_set_2 + val_set_2
+
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        return self.dataset[idx][0], self.dataset[idx][1]
 
 
 class VITdataset(Dataset):
@@ -99,23 +136,20 @@ class VITdataset(Dataset):
                                              transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
         self.data_dir = root_dir
         self.dataset = datasets.ImageFolder(self.data_dir+'train', self.Transform) + datasets.ImageFolder(self.data_dir+'val', self.Transform)
-        train_set_1, train_set_2 = dataset_split_2(datasets.ImageFolder(self.data_dir+'train', self.Transform), num_class, nums_per_class[0], random_seed)
-        val_set_1, val_set_2 = dataset_split_2(datasets.ImageFolder(self.data_dir+'val', self.Transform), num_class, nums_per_class[1], random_seed)
+        train_set_1, train_set_2 = data_split(datasets.ImageFolder(self.data_dir+'train', self.Transform), num_class, nums_per_class[0], is_target, random_seed)
+        val_set_1, val_set_2 = data_split(datasets.ImageFolder(self.data_dir+'val', self.Transform), num_class, nums_per_class[1], is_target, random_seed)
         if split == 'train':
-            if is_target:
-                self.dataset = train_set_1 + val_set_1
-            else:
-                self.dataset = train_set_2 + val_set_2
-        elif split == 'val':
-            if is_target:
-                self.dataset = train_set_2 + val_set_2
-            else:
-                self.dataset = train_set_1 + val_set_1
+            self.dataset = train_set_1 + val_set_1
+        else:
+            self.dataset = train_set_2 + val_set_2
+
+
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx):
         return self.dataset[idx][0], self.dataset[idx][1]
+
 
 class imageNet10(Dataset):
     def __init__(self, root_dir, split, num_class=10, nums_per_class=700, is_target = True, seed = 101):
@@ -125,7 +159,7 @@ class imageNet10(Dataset):
                                              transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
         self.root_dir = root_dir
         self.dataset = datasets.ImageFolder(self.root_dir, self.Transform)
-        set1, set2 = data_spilt(self.dataset, num_class, nums_per_class, is_target, seed)
+        set1, set2 = dataset_split(self.dataset, num_class, nums_per_class, is_target, seed)
         if split == 'train':
             self.dataset = set1
         else:
@@ -163,27 +197,19 @@ class imageNet(Dataset):
     def __getitem__(self, idx):
         return self.dataset[idx][0], self.dataset[idx][1]
 
+
 class imageNet100(Dataset):
-    def __init__(self, root_dir, split, num_class, nums_per_class,random_seed = 1001, is_target=True, set=1):
+    def __init__(self, root_dir, split, num_class, nums_per_class,random_seed = 1001, is_target=True, set=0):
         self.Transform = transforms.Compose([transforms.Resize([224, 224]),
                                              # transforms.RandomHorizontalFlip(),
                                              transforms.ToTensor(),
                                              transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
         # Output of pretransform should be PIL images
         self.data_dir = root_dir
-        train_set_1, train_set_2 = dataset_split_2(datasets.ImageFolder(self.data_dir+'train', self.Transform), num_class, nums_per_class[0], random_seed)
-        val_set_1, val_set_2 = dataset_split_2(datasets.ImageFolder(self.data_dir+'val', self.Transform), num_class, nums_per_class[1], random_seed)
-        test_set_1, test_set_2 = dataset_split_2(datasets.ImageFolder(self.data_dir + 'test', self.Transform), num_class, nums_per_class[2], random_seed)
-        if split == 'train':
-            if is_target:
-                self.dataset = train_set_1 + val_set_1 + test_set_1
-            else:
-                self.dataset = train_set_2 + val_set_2 + test_set_2
-        elif split == 'val':
-            if is_target:
-                self.dataset = train_set_2 + val_set_2 + test_set_2
-            else:
-                self.dataset = train_set_1 + val_set_1 + test_set_1
+        train_set_1, train_set_2 = data_split(datasets.ImageFolder(self.data_dir+'train', self.Transform), num_class, 1000, is_target, random_seed)
+        # val_set_1, val_set_2 = dataset_split_2(datasets.ImageFolder(self.data_dir+'val', self.Transform), num_class, nums_per_class[1], random_seed)
+        # test_set_1, test_set_2 = dataset_split_2(datasets.ImageFolder(self.data_dir + 'test', self.Transform), num_class, nums_per_class[2], random_seed)
+        self.dataset = train_set_1 if split == 'train' else train_set_2
 
         if set == 1:
             if split == 'train':
@@ -345,8 +371,8 @@ def get_loader(dataset, config, is_target, cif=True, set = 0):
                              nums_per_class=config.patch.nums_per_class,
                              random_seed=config.general.seed,
                              is_target=is_target)
-        # train_set = Subset(train_set, range(1000))
-        # val_set = Subset(val_set, range(1000))
+        # train_set = Subset(train_set, range(100))
+        # val_set = Subset(val_set, range(100))
 
     elif dataset == 'cinic10':
         train_set = cinic_dataset(root_dir=config.path.data_path, split='train', is_target=is_target,
@@ -381,6 +407,8 @@ def get_loader(dataset, config, is_target, cif=True, set = 0):
                            is_target=is_target,
                            random_seed=config.general.seed,
                            set=set)
+        # train_set = Subset(train_set, range(1000))
+        # val_set = Subset(val_set, range(1000))
     elif dataset == 'cinic':
         train_set = cinic_split_dataset(root_dir=config.path.data_path, split='train', num_class =config.patch.num_classes,
                                         nums_per_class=config.patch.nums_per_class,first=cif,

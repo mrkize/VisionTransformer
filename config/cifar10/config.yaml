@@ -39,15 +39,15 @@ general:
 #可选 0.0016/0.0017/185
 
 learning:
-  batch_size: 128
+  batch_size: 256
 #  learning_rate: 0.00185
   #dpsgd
-  learning_rate: 0.0015
+  learning_rate: 0.001
   min_lr: 0.00001
   momentum: 0.9
-  epochs: 30 #25 max 100 cifar10, 200 sinon
-  decrease_lr_factor: 0.1
-  decrease_lr_every: 50
+  epochs: 30
+  decrease_lr_factor: 1
+  decrease_lr_every: 1
   weight_decay: 0.00005
   beta1: 0.9
   beta2: 0.99
@@ -66,4 +66,4 @@ mask:
     mask_ratio: 0.5
     jigsaw: 0.5
     num_masking_patches: 8
-    min_num_patches: 4
+    min_num_patches: 2
