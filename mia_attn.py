@@ -89,25 +89,27 @@ def get_args():
 
 
 class classifier(nn.Module):
-    def __init__(self, input_dim=384, std=0.2):
+    def __init__(self, input_dim=384, std=0.15):
         super().__init__()
         self.input_dim = input_dim
         self.fc1 = nn.Linear(self.input_dim, 32)
         torch.nn.init.normal_(self.fc1.weight.data, 0, std)
+        self.batch_norm1 = nn.BatchNorm1d(32)
         self.fc2 = nn.Linear(32, 32)
         torch.nn.init.normal_(self.fc2.weight.data, 0, std)
         # self.fc3 = nn.Linear(32, 32)
         # torch.nn.init.normal_(self.fc2.weight.data, 0, 0.1)
-        self.batch_norm = nn.BatchNorm1d(32)
+        self.batch_norm2 = nn.BatchNorm1d(32)
         self.fc4 = nn.Linear(32, 2)
         torch.nn.init.normal_(self.fc4.weight.data, 0, std)
 
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
+        # x = self.batch_norm1(x)
         x = F.relu(self.fc2(x))
         # x = F.relu(self.fc3(x))
-        x = self.batch_norm(x)
+        x = self.batch_norm2(x)
         x = F.relu(self.fc4(x))
         return x
 
@@ -397,15 +399,11 @@ def get_output_data(model, attention_rollout, loader, atk_method):
 
 def attn_rollout_atk_nn(args):
     args.noise_repeat = 3
-    args.epochs = 50
-    args.lr = 0.001
+    args.epochs = 25
+    args.lr = 0.002
     config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     sha_dataset, sha_target = get_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
-    # torch.save(sha_dataset, "sha_dataset_roll.pt")
-    # torch.save(sha_target, "sha_target_roll.pt")
-    # sha_dataset = torch.load("sha_dataset_roll.pt")
-    # sha_target = torch.load("sha_target_roll.pt")
     tra_dataset = torch.utils.data.TensorDataset(sha_dataset, sha_target)
     train_loader = torch.utils.data.DataLoader(tra_dataset, batch_size=256, shuffle=True)
     atk_model = classifier(args.noise_repeat).to(args.device)
@@ -413,10 +411,6 @@ def attn_rollout_atk_nn(args):
     # print(thr)
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     tar_dataset, tar_target = get_data(target_model, target_rollout, tar_loader, args.atk_method)
-    # torch.save(tar_dataset, "tar_dataset_roll.pt")
-    # torch.save(tar_target, "tar_target_roll.pt")
-    # tar_dataset = torch.load("tar_dataset_roll.pt")
-    # tar_target = torch.load("tar_target_roll.pt")
     val_dataset = torch.utils.data.TensorDataset(tar_dataset, tar_target)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=256, shuffle=False)
     acc, pre, rec = predict(atk_model, val_loader, len(val_dataset))
@@ -430,15 +424,15 @@ def attn_rollout_atk_nn(args):
     print("{} attack acc:{:.4f}\nprecision: {:.4f}\nRecall: {:.4f}".format(pad,acc, pre,rec))
     return acc, pre, rec
 
+
 def baseline_d(args):
-    args.epocs = 200
-    args.lr = 0.0001
+    args.epochs = 100
+    args.lr = 0.21
     config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     atk_train_loader, atk_loader_size = get_output_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
     atk_model = classifier().to(args.device)
     atk_model = train(atk_model, atk_train_loader, atk_loader_size, args.epochs)
-
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     atk_val_loader, val_loader_size = get_output_data(target_model, target_rollout, tar_loader, args.atk_method)
     acc, pre, rec = predict(atk_model, atk_val_loader, val_loader_size)

@@ -2,5 +2,6 @@
 *.pth
 *.JPEG
 *.png
+*.pt
 *.npy
 /data/ImageNet-2012-val/ILSVRC2012_img_val.tar
