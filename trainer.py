@@ -122,10 +122,9 @@ def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, j
                 if phase == 'train':
                     if mixup_fn is not None:
                         inputs, labels = mixup_fn(inputs, labels)
-                    if epoch >= config.mask.warmup_epoch:
-                        unk_mask = get_mask(opt.nums, 197)
-                        if unk_mask is not None:
-                            unk_mask = torch.from_numpy(unk_mask).long().to(opt.device)
+                    if epoch >= config.mask.warmup_epoch and torch.rand(1) > config.mask.jigsaw and opt.nums != 0:
+                        inputs, unk_mask = jigsaw_pullzer(inputs)
+                        unk_mask = torch.from_numpy(unk_mask).long().to(opt.device)
                 else:
                     criterion = val_criterion
                 # zero the parameter gradients
@@ -175,8 +174,8 @@ def mask_train_model(model_type, opt, config, data_loader, data_size, is_target 
         model = ViT_mask.creat_VIT(config)
     else:
         model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
-        model.load_state_dict(torch.load('./vit_small_patch16_224_{}.pth'.format(config.patch.num_classes)))
-        model.ape = opt.ape
+        model.load_state_dict(torch.load('./vit_small_patch16_224_{}.pth'.format(opt.n_class)))
+        model.ape = opt.ape    # model.pos_embed = nn.Parameter(torch.randn(1, 198, 384) * .02)
     model = model.to(opt.device)
     model.train_method = opt.pe_aug
     if config.learning.DDP:
@@ -188,7 +187,7 @@ def mask_train_model(model_type, opt, config, data_loader, data_size, is_target 
 
     criterion = nn.CrossEntropyLoss()
     mixup_fn = None
-    if opt.defence == "label_smoothing":
+    if opt.dataset == "ImageNet100":
         mixup_fn = Mixup(
             mixup_alpha=config.general.mixup_alpha,
             # cutmix_alpha=config.general.cutmix_alpha,

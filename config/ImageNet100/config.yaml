@@ -2,7 +2,7 @@ path:
   data_path: '../data/ImageNet100/'
   result_path: results/VIT_ImageNet100/
   model_path: Network/VIT_Model_ImageNet100/
-  public_path: '../data/public/imagenet-public/'
+  public_path: '../data/cinic-10/test/'
 
 patch:
   image_size: 224
@@ -40,10 +40,10 @@ learning:
 #  learning_rate: 0.001
 
   batch_size: 256
-  learning_rate: 0.0015
+  learning_rate: 0.0012
   min_lr: 0.00001
   momentum: 0.9
-  epochs: 40
+  epochs: 30
   decrease_lr_factor: 0.1
   decrease_lr_every: 50
   weight_decay: 0.00005
@@ -64,4 +64,4 @@ mask:
     mask_ratio: 0.5
     jigsaw: 0.5
     num_masking_patches: 8
-    min_num_patches: 1
+    min_num_patches: 4

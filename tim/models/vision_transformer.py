@@ -68,8 +68,8 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        # self.fused_attn = use_fused_attn()
-        self.fused_attn = False
+        self.fused_attn = use_fused_attn()
+        # self.fused_attn = False
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -443,6 +443,11 @@ class VisionTransformer(nn.Module):
             act_layer: MLP activation layer.
             block_fn: Transformer block layer.
         """
+
+        # img_size = 32
+        # patch_size = 4
+        # embed_dim = 192
+        # num_heads = 3
         super().__init__()
         assert global_pool in ('', 'avg', 'token')
         assert class_token or global_pool != 'token'
@@ -936,7 +941,7 @@ def checkpoint_filter_fn(
 def _cfg(url='', **kwargs):
     return {
         'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'num_classes': 1000, 'input_size': (3, 32, 32), 'pool_size': None,
         'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'patch_embed.proj', 'classifier': 'head',

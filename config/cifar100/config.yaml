@@ -44,10 +44,10 @@ general:
 
 learning:
   batch_size: 256
-  learning_rate: 0.0006
+  learning_rate: 0.0008
   min_lr: 0.00001
   momentum: 0.9
-  epochs: 40
+  epochs: 30
   decrease_lr_factor: 1
   decrease_lr_every: 1
   weight_decay: 0.00005
@@ -66,4 +66,4 @@ mask:
     warmup_epoch: 5
     jigsaw: 0.5
     num_masking_patches: 8
-    min_num_patches: 2
+    min_num_patches: 4

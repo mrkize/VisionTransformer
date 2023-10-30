@@ -12,7 +12,7 @@ from dataloader import public_data
 
 class MaskingGenerator:
     def __init__(
-            self, input_size, num_masking_patches, min_num_patches=2, max_num_patches=None,
+            self, input_size, num_masking_patches, min_num_patches=8, max_num_patches=None,
             min_aspect=0.3, max_aspect=None):
         if not isinstance(input_size, tuple):
             input_size = (input_size, ) * 2
@@ -154,7 +154,6 @@ class JigsawPuzzleMaskedRegion(object):
 
             cls_pad = np.zeros((1, 1), dtype=np.int32)
             masks = np.concatenate([cls_pad, masks[np.newaxis, :]], axis=1) # [1, C+1]
-
             to_images = self.patches_to_im(to_patches)
             return to_images, masks
         elif self.mask_type == "pbf":
@@ -179,6 +178,7 @@ class JigsawPuzzleMaskedRegion(object):
             masks = np.concatenate([cls_pad, masks[np.newaxis, :]], axis=1) # [1, C+1]
             return x, masks
 
+
         elif self.mask_type == "zero":
             N = x.size(0)
             to_patches = self.im_to_patches(x) # [N, C*patch_size*patch_size, seq_len]
@@ -186,6 +186,7 @@ class JigsawPuzzleMaskedRegion(object):
             to_patches[:,:,nonzero] = torch.zeros(1, to_patches.shape[1], 1).to(self.device)
             to_images = self.patches_to_im(to_patches)
             return to_images, None
+
 
         elif self.mask_type == "repeat":
             N = x.size(0)

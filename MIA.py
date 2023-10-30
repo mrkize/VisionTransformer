@@ -153,16 +153,40 @@ config_path = config_dict['Swin'][opt.dataset] if 'Swin' in opt.model else confi
 
 
 config = MyConfig.MyConfig(path=config_path)
-# config.set_subkey('learning','DP', False)
 config.set_subkey('learning','DDP', False)
-# config.set_subkey('patch', 'image_size', 32)
-# config.set_subkey('patch', 'patch_size', 4)
-# config.set_subkey('patch', 'num_patches', 64)
-# config.set_subkey('patch', 'embed_dim', 192)
-# config.set_subkey('learning', 'epochs', 50)
 target_loader, target_size = get_loader(opt.dataset, config, is_target=True)
 shadow_loader, shadow_size = get_loader(opt.dataset, config, is_target=False)
 target_train_loader, target_test_loader, shadow_train_loader, shadow_test_loader = target_loader['train'], target_loader['val'], shadow_loader['train'], shadow_loader['val']
+
+
+def freeze_parameters(model, freeze=True):
+    for param in model.parameters():
+        param.requires_grad = not freeze
+
+
+def replace_last_fc_layer(model, num_classes):
+    num_features = model.fc.in_features
+    model.fc = torch.nn.Linear(num_features, num_classes)
+
+
+def ft_model(model, dataloader, num_epochs=5, learning_rate=0.0001, freeze=True):
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    criterion = torch.nn.CrossEntropyLoss()
+    freeze_parameters(model, freeze)
+    num_features = model.fc.in_features
+    model.fc = torch.nn.Linear(num_features, opt.n_class)
+    for epoch in range(num_epochs):
+        for inputs, labels in dataloader:
+            inputs, labels = inputs.to(opt.device), labels.to(opt.device)
+            optimizer.zero_grad()
+            outputs = model(inputs, unk_mask=None)
+            _, preds = torch.max(outputs, 1)
+            # labels = torch.squeeze(labels)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+    return model
+
 
 def load_model(opt, config):
     if "Swin" in opt.model:
@@ -209,7 +233,11 @@ def load_model(opt, config):
             target_model.load_state_dict(torch.load(path + '.pth'))
             shadow_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
             shadow_model.load_state_dict(torch.load(path + '_shadow.pth'))
-
+        ft_config = MyConfig.MyConfig(path=config_dict['ViT']["ImageNet10"])
+        loader1, size = get_loader("ImageNet10", ft_config, is_target=True)
+        loader2, size = get_loader("ImageNet10", ft_config, is_target=False)
+        target_model = ft_model(target_model, loader1["train"])
+        shadow_model = ft_model(shadow_model, loader2["train"])
     if opt.maskPE:
         target_model.PE = False
         shadow_model.PE = False
