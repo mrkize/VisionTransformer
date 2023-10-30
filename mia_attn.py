@@ -427,7 +427,7 @@ def attn_rollout_atk_nn(args):
 
 def baseline_d(args):
     args.epochs = 100
-    args.lr = 0.21
+    args.lr = 0.22
     config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     atk_train_loader, atk_loader_size = get_output_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
