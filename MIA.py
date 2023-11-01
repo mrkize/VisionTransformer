@@ -114,7 +114,7 @@ def write_copy(wf, res):
     wf.write(line)
 
 def write_spilt(wf):
-    wf.write('--------------------------------------------------------------------------------------------------------------------\n')
+    wf.write('-'*120+"\n")
 
 def write_time(wf):
     wf.write(str(datetime.datetime.now())[:19]+'\n')

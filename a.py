@@ -1,23 +1,20 @@
 import os
-
-import matplotlib.pyplot as plt
-import cv2
-
-
-img_name = ["0.000", "0.138", "0.276", "0.551", "1.000", "exchg_0.000"]
-png_path = "./attn_heat_soft/"
-save_path = "./0apng_mix_soft/"
-for subfloder in os.scandir(png_path):
-    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(40, 40))
-    image = cv2.imread('{}/img.png'.format(subfloder.path))
-    axes[0, 1].imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    axes[0, 1].set_title('orain')
-    axes[0, 0].axis('off')
-    axes[0, 2].axis('off')
-    for i, name in enumerate(img_name):
-        image = cv2.imread('{}/orain_mask_{}.pth_0.900_max.png'.format(subfloder.path,name))
-        axes[i//3 + 1, i%3].imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        axes[i//3 + 1, i%3].set_title(name)
-    plt.tight_layout()
-    plt.savefig('{}{}.png'.format(save_path, subfloder.name))
-    plt.close(fig)
+atk_list = ["roll_nn", "last_attn_nn", "out", "base_d"]
+dataset_list = ["cifar10", "cifar100", "ImageNet100"]
+metric = ["cos-sim", "pearson", "Euclid"]
+for atk in atk_list:
+    for dataset in dataset_list:
+        cmd = "python run_atk.py --atk_method {} --dataset {}".format(atk, dataset)
+        os.system(cmd)
+for atk in atk_list:
+    for dataset in dataset_list:
+        cmd = "python run_atk.py --atk_method {} --dataset {} --adaptive".format(atk, dataset)
+        os.system(cmd)
+# atk = "metric"
+# for dataset in dataset_list:
+#     cmd = "python run_atk.py --atk_method {} --dataset {}".format(atk, dataset)
+#     os.system(cmd)
+# for atk in atk_list:
+#     for dataset in dataset_list:
+#         cmd = "python mia_attn.py --atk_method {} --dataset {} --metric {}".format(atk, dataset, mt)
+#         os.system(cmd)

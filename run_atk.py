@@ -27,5 +27,15 @@ model_names = ["pbf_mask_0.{}.pth".format(i) for i in nums]
 model_names2 = ["orain_mask_0.{}.pth".format(i) for i in nums_2]
 model_names3 = ["pbf_mask_0.{}.pth".format(i) for i in nums_3]
 model_names4 = ["pbf_mask_0.{}.pth".format(i) for i in nums_4]
-for model_name in model_names3:
-    os.system("python mia_attn.py --dataset {} --atk_method {} --model {} --adaptive".format(args.dataset, args.atk_method, model_name))
+pad = " --adaptive" if args.adaptive else ""
+atk_list = ["roll_nn", "last_attn_nn", "out", "base_d", "roll", "last_attn"]
+dataset_list = ["cifar10", "cifar100", "ImageNet100"]
+for atk in atk_list:
+    for dataset in dataset_list:
+        for model_name in model_names3:
+            os.system("python mia_attn.py --dataset {} --atk_method {} --model {}".format(dataset, atk, model_name))
+
+for atk in atk_list:
+    for dataset in dataset_list:
+        for model_name in model_names3:
+            os.system("python mia_attn.py --dataset {} --atk_method {} --model {} --adaptive".format(dataset, atk, model_name))

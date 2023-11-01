@@ -15,6 +15,7 @@ from utils import MyConfig
 from vit_rollout import rollout, VITAttentionRollout
 from torch import nn
 import timm
+import csv
 
 config_dict = {'cifar10': "config/cifar10/",
                 'cifar100': "config/cifar100/",
@@ -54,17 +55,36 @@ def write_time():
 
 
 def write_res(res):
-    line = "Acuracy: {:.4f}{}Precision: {:.4f}{}Recall: {:.4f}".format(res[0], " "*5, res[1], " "*5, res[2])
+    if len(res) == 3:
+        line = "Acuracy: {:.4f}{}Precision: {:.4f}{}Recall: {:.4f}".format(res[0], " "*5, res[1], " "*5, res[2])
+    else:
+        line = ",".join("{:.4f}".format(met) for met in res)
     line += "\n"
     wf.write(line)
 
 
 def write_config(args):
-    line = "{:<16}{:<23}Atk_method: {:<11}metric: {:<12}Adaptive: {}\n".format(
+    line = "{:<16}{:<23}Atk_method: {:<14}metric: {:<12}Adaptive: {}\n".format(
         args.dataset, args.model, args.atk_method, args.metric, args.adaptive)
     wf.write(line)
 
 
+def change_csv(dir, value):
+    rows = []
+    with open(dir, 'r') as file:
+        reader = csv.DictReader(file)
+        rows = list(reader)
+    for row in rows:
+        if row['atk'] == args.atk_method:
+            row[args.model] = round(value, 4)
+
+    fieldnames = rows[0].keys()
+    with open(dir, 'w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--use_cuda', action='store_true', default=True)
@@ -76,8 +96,8 @@ def get_args():
     parser.add_argument('--head_fusion', type=str, default='mean')
     parser.add_argument('--discard_ratio', type=float, default=0)
     parser.add_argument('--addnoise', action='store_true', default=False)
-    parser.add_argument('--metric', type=str, default="cos-sim")
-    parser.add_argument('--atk_method', type=str, default="last_attn_nn")
+    parser.add_argument('--metric', type=str, default="pearson")
+    parser.add_argument('--atk_method', type=str, default="metric_attn")
     parser.add_argument('--lr', type=float, default=0.004)
     parser.add_argument("--local-rank", type=int, default=0, help="number of cpu threads to use during batch generation")
     parser.add_argument('--noise_nums', type=int, default=10)
@@ -181,7 +201,7 @@ def init_config_model_attn(args):
         shadow_model.load_state_dict(torch.load(config.path.model_path + args.model[:-4]+"_shadow.pth"))
     else:
         shadow_model.load_state_dict(torch.load(config.path.model_path + args.model[:-7] + "000_shadow.pth"))
-    if "attn" in args.atk_method or "rollout" in args.atk_method:
+    if "attn" in args.atk_method or "roll" in args.atk_method:
         target_model = switch_fused_attn(target_model)
         shadow_model = switch_fused_attn(shadow_model)
     # target_model, shadow_model = target_model.to(args.device), shadow_model.to(args.device)
@@ -269,34 +289,44 @@ def calculate_accuracy(data, labels, threshold):
     return accuracy, pre, rec
 
 
+def map_to_range(data):
+    min_val = torch.min(data)
+    max_val = torch.max(data)
+    mapped_data = (2 * (data - min_val) / (max_val - min_val)) - 1
+    return mapped_data
+
+
 def get_data(model, attention_rollout, loader, atk_method):
-    attn_orain_train = get_attn(model, loader["train"], attention_rollout, noise=False, out_atk=atk_method)
-    attn_orain_val = get_attn(model, loader["val"], attention_rollout, noise=False, out_atk=atk_method)
-    # train_res = torch.zeros(attn_orain_train.shape[0]).to(args.device)
-    # val_res = torch.zeros(attn_orain_val.shape[0]).to(args.device)
+    attn_origin_train = get_attn(model, loader["train"], attention_rollout, noise=False, out_atk=atk_method)
+    attn_origin_val = get_attn(model, loader["val"], attention_rollout, noise=False, out_atk=atk_method)
+    # train_res = torch.zeros(attn_origin_train.shape[0]).to(args.device)
+    # val_res = torch.zeros(attn_origin_val.shape[0]).to(args.device)
     train_res_list = []
     val_res_list = []
     for i in range(args.noise_repeat):
         attn_train= get_attn(model, loader["train"], attention_rollout, noise=True, out_atk=atk_method)
-        metric_train_repeat = torch.cosine_similarity(attn_orain_train,attn_train,dim=1)
-        # 计算欧式距离
-        # metric_train_repeat = torch.norm(attn_orain_train - attn_train, dim=1)
-        #计算交叉熵
-        # metric_train_repeat = CrossEntropy(attn_orain_train, attn_train)
+        attn_val = get_attn(model, loader["val"], attention_rollout, noise=True, out_atk=atk_method)
         # 皮尔逊相关系数
-        # metric_train_repeat = pearson_correlation(attn_orain_train, attn_train, -1)
-        # train_res += metric_train_repeat
-        train_res_list.append(metric_train_repeat)
-
-        attn_val= get_attn(model, loader["val"], attention_rollout, noise=True, out_atk=atk_method)
-        metric_val_repeat = torch.cosine_similarity(attn_orain_val,attn_val, dim=1)
+        if args.metric == "pearson":
+            metric_train_repeat = pearson_correlation(attn_origin_train, attn_train, -1)
+            metric_val_repeat = pearson_correlation(attn_origin_val, attn_val, -1)
         # 计算欧式距离
-        # metric_val_repeat = torch.norm(attn_orain_val - attn_val, dim=1)
+        elif args.metric == "Euclid":
+            metric_train_repeat = torch.norm(attn_origin_train - attn_train, dim=1)
+            metric_val_repeat = torch.norm(attn_origin_val - attn_val, dim=1)
+            metric_train_repeat = map_to_range(metric_train_repeat)
+            metric_val_repeat = map_to_range(metric_val_repeat)
         # 计算交叉熵
-        # metric_val_repeat = CrossEntropy(attn_orain_val, attn_val)
-        # 皮尔逊相关系数
-        # metric_val_repeat = pearson_correlation(attn_orain_val, attn_val, -1)
-        # val_res += metric_val_repeat
+        elif args.metric == "CE":
+            metric_train_repeat = CrossEntropy(attn_origin_train, attn_train)
+            metric_val_repeat = CrossEntropy(attn_origin_val, attn_val)
+            metric_train_repeat = map_to_range(metric_train_repeat)
+            metric_val_repeat = map_to_range(metric_val_repeat)
+        # 余弦相似度
+        else:
+            metric_train_repeat = torch.cosine_similarity(attn_origin_train,attn_train,dim=1)
+            metric_val_repeat = torch.cosine_similarity(attn_origin_val, attn_val, dim=1)
+        train_res_list.append(metric_train_repeat)
         val_res_list.append(metric_val_repeat)
 
     if "nn" not in atk_method:
@@ -305,6 +335,10 @@ def get_data(model, attention_rollout, loader, atk_method):
     else:
         train_res = torch.stack(train_res_list, dim=-1)
         val_res = torch.stack(val_res_list, dim=-1)
+
+    if "metric" in atk_method:
+        return train_res, val_res
+
     data = torch.cat([train_res, val_res])
     target = torch.cat([torch.ones(train_res.shape[0], dtype=torch.long), torch.zeros(val_res.shape[0], dtype=torch.long)]).to(args.device)
     # dataset = TensorDataset(data, target)
@@ -354,7 +388,7 @@ def predict(model, loader, size):
         with torch.no_grad():
             outputs = model(inputs)
         _, preds = torch.max(outputs, 1)
-        running_corrects += preds.eq(target.to(args.device)).sum().item()
+        running_corrects += preds.eq(target.to(args.device)).sum()
         TP += sum((preds == 1) & (labels == 1))
         FP += sum((preds == 0) & (labels == 1))
         FN += sum((preds == 1) & (labels == 0))
@@ -362,62 +396,77 @@ def predict(model, loader, size):
     print("Val acc {:.5f}.".format(acc))
     prec = TP / (TP + FP)
     reca = TP / (TP + FN)
-    return acc, prec, reca
+    print(acc, prec, reca)
+    return acc.item(), prec.item(), reca.item()
 
 
 def attn_rollout_atk(args):
     config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     sha_dataset, sha_target = get_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
-    # sha_dataset, sha_target = sha_dataset.to(args.device), sha_target.to(args.device)
     thr = find_best_threshold(sha_dataset, sha_target)
-    # print(thr)
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     tar_dataset, tar_target = get_data(target_model, target_rollout, tar_loader, args.atk_method)
-    # tar_dataset, tar_target = tar_dataset.to(args.device), tar_target.to(args.device)
     val_acc, pre, rec = calculate_accuracy(tar_dataset, tar_target, thr)
     print("{}".format(args.model))
     print(val_acc)
     pad = "Output"
-    if args.atk_method == "rollout":
+    if args.atk_method == "roll":
         pad = "Attn rollout"
     elif args.atk_method == "last_attn":
         pad = "Last_attn"
     print("{} attack acc:{:.4f}\nprecision: {:.4f}\nRecall: {:.4f}".format(pad,val_acc, pre,rec))
-    return val_acc, pre, rec
+    return val_acc.item(), pre.item(), rec.item()
 
 
 def get_output_data(model, attention_rollout, loader, atk_method):
-    attn_orain_train = get_attn(model, loader["train"], attention_rollout, noise=False)
-    attn_orain_val = get_attn(model, loader["val"], attention_rollout, noise=False)
-    data = torch.cat([attn_orain_train, attn_orain_val], dim=0)
-    target = torch.cat([torch.ones(attn_orain_train.shape[0], dtype=torch.long), torch.zeros(attn_orain_val.shape[0], dtype=torch.long)])
+    attn_origin_train = get_attn(model, loader["train"], attention_rollout, noise=False)
+    attn_origin_val = get_attn(model, loader["val"], attention_rollout, noise=False)
+    data = torch.cat([attn_origin_train, attn_origin_val], dim=0)
+    target = torch.cat([torch.ones(attn_origin_train.shape[0], dtype=torch.long), torch.zeros(attn_origin_val.shape[0], dtype=torch.long)])
     dataset = torch.utils.data.TensorDataset(data,target)
     out_loader = torch.utils.data.DataLoader(dataset, batch_size=512, shuffle=True)
     return out_loader, len(dataset)
 
 
 def attn_rollout_atk_nn(args):
+    ###
     args.noise_repeat = 3
     args.epochs = 25
     args.lr = 0.002
+    ###
+    # if args.dataset == "cifar100":
+    #     args.noise_repeat = 3
+    #     args.epochs = 25
+    #     args.lr = 0.005
     config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     sha_dataset, sha_target = get_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
     tra_dataset = torch.utils.data.TensorDataset(sha_dataset, sha_target)
     train_loader = torch.utils.data.DataLoader(tra_dataset, batch_size=256, shuffle=True)
+    #
+    # torch.save(train_loader, "pt/train_loader.pt")
+    # torch.save(tra_dataset, "pt/tra_dataset.pt")
+    # train_loader = torch.load("pt/train_loader.pt")
+    # tra_dataset = torch.load("pt/tra_dataset.pt")
     atk_model = classifier(args.noise_repeat).to(args.device)
     atk_model = train(atk_model, train_loader, len(tra_dataset), args.epochs)
-    # print(thr)
+
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     tar_dataset, tar_target = get_data(target_model, target_rollout, tar_loader, args.atk_method)
     val_dataset = torch.utils.data.TensorDataset(tar_dataset, tar_target)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=256, shuffle=False)
+    #
+    # torch.save(val_loader, "pt/val_loader.pt")
+    # torch.save(val_dataset, "pt/val_dataset.pt")
+    # val_loader = torch.load("pt/val_loader.pt")
+    # val_dataset = torch.load("pt/val_dataset.pt")
+
     acc, pre, rec = predict(atk_model, val_loader, len(val_dataset))
     print("{}".format(args.model))
     print(acc)
     pad = "Output"
-    if args.atk_method == "rollout":
+    if args.atk_method == "roll":
         pad = "Attn rollout"
     elif args.atk_method == "last_attn":
         pad = "Last_attn"
@@ -426,15 +475,27 @@ def attn_rollout_atk_nn(args):
 
 
 def baseline_d(args):
-    args.epochs = 100
-    args.lr = 0.22
+    if args.dataset == "cifar100":
+        args.epochs = 100
+        args.lr = 0.2
+    else:
+        args.epochs = 100
+        args.lr = 0.1
     config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     atk_train_loader, atk_loader_size = get_output_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
+    # torch.save(atk_train_loader, "pt/atk_train_loader.pt")
+    # torch.save(atk_loader_size, "pt/atk_loader_size.pt")
+    # atk_train_loader = torch.load("pt/atk_train_loader.pt")
+    # atk_loader_size = torch.load("pt/atk_loader_size.pt")
     atk_model = classifier().to(args.device)
     atk_model = train(atk_model, atk_train_loader, atk_loader_size, args.epochs)
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     atk_val_loader, val_loader_size = get_output_data(target_model, target_rollout, tar_loader, args.atk_method)
+    # torch.save(atk_val_loader, "pt/atk_val_loader.pt")
+    # torch.save(val_loader_size, "pt/val_loader_size.pt")
+    # atk_val_loader = torch.load("pt/atk_val_loader.pt")
+    # val_loader_size = torch.load("pt/val_loader_size.pt")
     acc, pre, rec = predict(atk_model, atk_val_loader, val_loader_size)
     print("Baseline_D attack acc:{:.4f}".format(acc))
     return acc, pre, rec
@@ -474,17 +535,61 @@ def baseline_e(args):
     print("{} attack acc:{:.4f}".format("baseline-e",val_acc))
     return val_acc
 
+
+def get_predict(args):
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+    tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
+    train_acc, _, _ = predict(target_model, tar_loader["train"], tar_size["train"])
+    val_acc, _, _ = predict(target_model, tar_loader["val"], tar_size["val"])
+    print(train_acc, val_acc)
+    return train_acc, val_acc, 0
+
+
+def get_predict_shadow(args):
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+    sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
+    train_acc, _, _ = predict(shadow_model, sha_loader["train"], sha_size["train"])
+    val_acc, _, _ = predict(shadow_model, sha_loader["val"], sha_size["val"])
+    print(train_acc, val_acc)
+    return train_acc, val_acc, 0
+
+
+def get_metric(args):
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+    args.noise_repeat = 4
+    tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
+    train_res, val_res = get_data(target_model, target_rollout, tar_loader, args.atk_method)
+    torch.save(train_res, "pt/train_res.pt")
+    torch.save(val_res, "pt/val_res.pt")
+    # train_res, val_res = torch.load("pt/train_res.pt"), torch.load("pt/val_res.pt")
+    train_res = train_res.cpu().numpy()
+    val_res = val_res.cpu().numpy()
+    return train_res.max(), train_res.min(), train_res.mean(), val_res.max(), val_res.min(), val_res.mean()
+
+
 torch.random.manual_seed(1333)
-rollout_list = ["last_attn", "out", "rollout"]
+rollout_list = ["last_attn", "out", "roll"]
 args = get_args()
 if args.atk_method in rollout_list:
     res = attn_rollout_atk(args)
 elif args.atk_method == "base_d":
     res = baseline_d(args)
-else:
+elif args.atk_method == "predict":
+    res = get_predict_shadow(args)
+elif "nn" in args.atk_method:
     res = attn_rollout_atk_nn(args)
-write_time()
-write_config(args)
-write_res(res)
-write_spilt()
-
+elif "metric" in args.atk_method:
+    args.model = "pbf_mask_0.969.pth"
+    res = get_metric(args)
+else:
+    res = 0, 0, 0
+# res = 3.1234124, 3.1234124, 3.1234124
+dir = "csv_res_adp" if args.adaptive else "csv_res"
+change_csv("{}/{}/acc.csv".format(dir, args.dataset), res[0])
+change_csv("{}/{}/pre.csv".format(dir, args.dataset), res[1])
+change_csv("{}/{}/rec.csv".format(dir, args.dataset), res[2])
+# write_time()
+# write_config(args)
+# write_res(res)
+# write_spilt()
+# wf.close()

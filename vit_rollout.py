@@ -97,10 +97,11 @@ class VITAttentionRollout:
         with torch.no_grad():
             output = self.model.forward_features(input_tensor, None)
             # print(torch.topk(torch.nn.functional.softmax(output,dim=-1), 5))
-        if ret_out == "out" or ret_out == "out_nn":
-            return output[:,0,:]
-        elif "rollout" in ret_out:
+        if "roll" in ret_out:
             return rollout(self.attentions, self.discard_ratio, self.head_fusion, self.device)
-        elif "last_attn" in ret_out:
+        elif "attn" in ret_out:
             return last_attn(self.attentions, self.head_fusion)
+        elif "out" in ret_out:
+            return output[:,0,:]
+
         # return  torch.stack(self.attentions).mean(2).numpy(), 0
