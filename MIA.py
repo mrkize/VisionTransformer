@@ -1,3 +1,4 @@
+import csv
 import datetime
 
 import tim
@@ -26,6 +27,7 @@ np.random.seed(0)
 def parse_option():
 
     parser = argparse.ArgumentParser('argument for training')
+    parser.add_argument('--adaptive', action='store_true', default=False)
     parser.add_argument('--maskPE', action = "store_true",
                         help='whether use PE')
     parser.add_argument('--batch_size', type=int, default=512,
@@ -45,8 +47,8 @@ def parse_option():
                         help='learning rate')
 
     # model dataset
-    parser.add_argument('--model', type=str, default='orain_mask_0.000')
-    parser.add_argument('--dataset', type=str, default='ImageNet100',
+    parser.add_argument('--model', type=str, default='pbf_mask_0.000.pth')
+    parser.add_argument('--dataset', type=str, default='cifar10',
                         help='dataset')
     parser.add_argument('--data_path', type=str, default='data/',
                         help='data_path')
@@ -69,13 +71,13 @@ def parse_option():
                         help="single_label_dataset")
     parser.add_argument('--multi_label_dataset', type=list, default=["UTKFace", "CelebA", "Place365", "Place100", "Place50", "Place20"],
                         help="multi_label_dataset")
-    parser.add_argument('--mia_type', type=str, default="metric-based",
+    parser.add_argument('--mia_type', type=str, default="ft_nn",
                         help="nn-based, lebel-only, metric-based")
     parser.add_argument('--select_posteriors', type=int, default=3,
                         help='how many posteriors we select, if -1, we remains the original setting')
 
     parser.add_argument('--mia_defense', type=str,
-                        default="None", help='None or memGuard')
+                        default="ft_nn", help='None or memGuard')
 
     parser.add_argument('--modeldir', type=str, default="", help='None or memGuard')
     parser.add_argument('--valmode', action = "store_true", help='None or memGuard')
@@ -130,7 +132,7 @@ def write_config(wf, opt):
 
 
 opt = parse_option()
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+opt.device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 
 config_dict = { 'ViT': {
                 'cifar10': "config/cifar10/",
@@ -149,11 +151,12 @@ config_dict = { 'ViT': {
 }
 
 # torch.random.manual_seed(1001)
-config_path = config_dict['Swin'][opt.dataset] if 'Swin' in opt.model else config_dict['ViT'][opt.dataset]
+config_path = config_dict['ViT'][opt.dataset]
 
 
 config = MyConfig.MyConfig(path=config_path)
 config.set_subkey('learning','DDP', False)
+config.set_subkey('learning','DP', False)
 target_loader, target_size = get_loader(opt.dataset, config, is_target=True)
 shadow_loader, shadow_size = get_loader(opt.dataset, config, is_target=False)
 target_train_loader, target_test_loader, shadow_train_loader, shadow_test_loader = target_loader['train'], target_loader['val'], shadow_loader['train'], shadow_loader['val']
@@ -165,17 +168,21 @@ def freeze_parameters(model, freeze=True):
 
 
 def replace_last_fc_layer(model, num_classes):
-    num_features = model.fc.in_features
-    model.fc = torch.nn.Linear(num_features, num_classes)
+    model.head = torch.nn.Linear(384, num_classes)
+    return model
 
 
-def ft_model(model, dataloader, num_epochs=5, learning_rate=0.0001, freeze=True):
+def ft_model(model, dataloader, num_class, num_epochs=1, learning_rate=0.001, freeze=True):
+    if opt.dataset =="cifar100":
+        learning_rate = 0.0001
+    freeze_parameters(model, freeze)
+    model.head = torch.nn.Linear(384, 10).to(opt.device)
+    model.head.weight.requires_grad = True
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
     criterion = torch.nn.CrossEntropyLoss()
-    freeze_parameters(model, freeze)
-    num_features = model.fc.in_features
-    model.fc = torch.nn.Linear(num_features, opt.n_class)
+    model.train()
     for epoch in range(num_epochs):
+        # print(epoch)
         for inputs, labels in dataloader:
             inputs, labels = inputs.to(opt.device), labels.to(opt.device)
             optimizer.zero_grad()
@@ -189,55 +196,45 @@ def ft_model(model, dataloader, num_epochs=5, learning_rate=0.0001, freeze=True)
 
 
 def load_model(opt, config):
-    if "Swin" in opt.model:
-        if 'mask_avg' in opt.model:
-            path = config.path.model_path+opt.model[:13]
-            target_model = Swin_mask_avg.load_Swin(path + opt.model[13:] + '.pth', config)
-            shadow_model = Swin_mask_avg.load_Swin(path + '_shadow' + opt.model[13:] + '.pth', config)
-        elif 'ape' in opt.model:
-            path = config.path.model_path + opt.model
-            target_model = Swin_ape.load_Swin(path + '.pth', config)
-            shadow_model = Swin_ape.load_Swin(path + '_shadow.pth', config)
-        elif 'mask' in opt.model:
-            path = config.path.model_path + opt.model[:9]
-            target_model = Swin_mask.load_Swin(path + opt.model[9:] + '.pth', config)
-            shadow_model = Swin_mask.load_Swin(path + '_shadow' + opt.model[9:] + '.pth', config)
+    if opt.modeldir != "":
+        opt.model = 'ImageNet10_10'
+        target_model = ViT.load_VIT(opt.modeldir+opt.model+'.pth', config)
+        shadow_model = ViT.load_VIT(opt.modeldir+opt.model[:10]+'_shadow'+opt.model[10:]+'.pth', config)
+    elif 'ViT_mask_avg' in opt.model:
+        path = config.path.model_path+opt.model[:12]
+        target_model = ViT_mask_avg.load_VIT(path + opt.model[12:] + '.pth', config)
+        shadow_model = ViT_mask_avg.load_VIT(path + '_shadow' + opt.model[12:] + '.pth', config)
+    elif 'ViT_ape' in opt.model:
+        path = config.path.model_path + opt.model
+        target_model = ViT_ape.load_VIT(path + '.pth', config)
+        shadow_model = ViT_ape.load_VIT(path + '_shadow.pth', config)
+    elif 'mask' in opt.model:
+        path = config.path.model_path + opt.model
+        target_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
+        target_model.load_state_dict(torch.load(path))
+        shadow_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
+        if opt.adaptive:
+            shadow_model.load_state_dict(torch.load(config.path.model_path + 'pbf_mask_0.000_shadow.pth'))
         else:
-            path = config.path.model_path + opt.model
-            target_model = Swin.load_Swin(path + '.pth', config)
-            shadow_model = Swin.load_Swin(path + '_shadow.pth', config)
-    else:
-        if opt.modeldir != "":
-            opt.model = 'ImageNet10_10'
-            target_model = ViT.load_VIT(opt.modeldir+opt.model+'.pth', config)
-            shadow_model = ViT.load_VIT(opt.modeldir+opt.model[:10]+'_shadow'+opt.model[10:]+'.pth', config)
-        elif 'ViT_mask_avg' in opt.model:
-            path = config.path.model_path+opt.model[:12]
-            target_model = ViT_mask_avg.load_VIT(path + opt.model[12:] + '.pth', config)
-            shadow_model = ViT_mask_avg.load_VIT(path + '_shadow' + opt.model[12:] + '.pth', config)
-        elif 'ViT_ape' in opt.model:
-            path = config.path.model_path + opt.model
-            target_model = ViT_ape.load_VIT(path + '.pth', config)
-            shadow_model = ViT_ape.load_VIT(path + '_shadow.pth', config)
-        elif 'mask' in opt.model:
-            path = config.path.model_path + opt.model
-            target_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
-            target_model.load_state_dict(torch.load(path+ '.pth'))
-            shadow_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
-            shadow_model.load_state_dict(torch.load(path +'.pth'))
-        else :
-            path = config.path.model_path + opt.model
-            # target_model = ViT.load_VIT(path + '.pth', config)
-            # shadow_model = ViT.load_VIT(path + '_shadow.pth', config)
-            target_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
-            target_model.load_state_dict(torch.load(path + '.pth'))
-            shadow_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
-            shadow_model.load_state_dict(torch.load(path + '_shadow.pth'))
-        ft_config = MyConfig.MyConfig(path=config_dict['ViT']["ImageNet10"])
-        loader1, size = get_loader("ImageNet10", ft_config, is_target=True)
-        loader2, size = get_loader("ImageNet10", ft_config, is_target=False)
-        target_model = ft_model(target_model, loader1["train"])
-        shadow_model = ft_model(shadow_model, loader2["train"])
+            shadow_model.load_state_dict(torch.load(path[:-4] + '_shadow.pth'))
+    else :
+        path = config.path.model_path + opt.model
+        # target_model = ViT.load_VIT(path + '.pth', config)
+        # shadow_model = ViT.load_VIT(path + '_shadow.pth', config)
+        target_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
+        target_model.load_state_dict(torch.load(path + '.pth'))
+        shadow_model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
+        if opt.adaptive:
+            shadow_model.load_state_dict(torch.load('_shadow.pth'))
+        shadow_model.load_state_dict(torch.load(path + '_shadow.pth'))
+    target_model, shadow_model = target_model.to(opt.device), shadow_model.to(opt.device)
+    ft_config = MyConfig.MyConfig(path=config_dict['ViT']["cinic10"])
+    ft_config.set_subkey('learning', 'DDP', False)
+    ft_config.set_subkey('learning', 'DP', False)
+    loader1, size = get_loader("cinic10", ft_config, is_target=True)
+    loader2, size = get_loader("cinic10", ft_config, is_target=False)
+    target_model = ft_model(target_model, loader1["train"], opt.n_class)
+    shadow_model = ft_model(shadow_model, loader2["train"], opt.n_class)
     if opt.maskPE:
         target_model.PE = False
         shadow_model.PE = False
@@ -248,12 +245,20 @@ def load_model(opt, config):
     return target_model, shadow_model
 
 
-# if opt.no_PE == False:
-#     target_model = load_VIT('./Network/VIT_Model_cifar10/VIT_PE.pth')
-#     shadow_model = load_VIT('./Network/VIT_Model_cifar10/VIT_PE_shadow.pth')
-# else:
-#     target_model = load_VIT('./Network/VIT_Model_cifar10/VIT_NoPE.pth')
-#     shadow_model = load_VIT('./Network/VIT_Model_cifar10/VIT_NoPE_shadow.pth')
+def change_csv(dir, value):
+    rows = []
+    with open(dir, 'r') as file:
+        reader = csv.DictReader(file)
+        rows = list(reader)
+    for row in rows:
+        if row['atk'] == opt.mia_type:
+            row[opt.model] = round(value, 4)
+
+    fieldnames = rows[0].keys()
+    with open(dir, 'w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 ratio = [0.0625, 0.125, 0.1875, 0.25, 0.3125, 0.375, 0.4375, 0.5, 0.5625, 0.625, 0.6875, 0.75, 0.8125, 0.875, 0.9375]
@@ -264,33 +269,25 @@ os.makedirs("log/model/exp_attack/", exist_ok=True)
 for i in range(1):
     # opt.model = "ViT"if rt==0 else 'ViT_mask_' + str(rt)
     target_model, shadow_model = load_model(opt, config)
-    if opt.mia_type == "nn-based":
-        attack_model = torch.nn.DataParallel(attack_model, device_ids=[0, 1])
+    if opt.mia_type == "ft_nn":
         attack = attackTraining(opt, target_train_loader, target_test_loader,
-                                shadow_train_loader, shadow_test_loader, target_model, shadow_model, attack_model, device)
+                                shadow_train_loader, shadow_test_loader, target_model, shadow_model, attack_model, opt.device)
 
         attack.parse_dataset()
         acc_train = 0
         acc_test = 0
         epoch_train = opt.epochs
-        train_acc, test_acc, precision, recall, f1, AUC = attack.train(epoch_train)  # train 100 epoch
-        target_train_acc, target_test_acc, shadow_train_acc, shadow_test_acc = attack.original_performance
-        # attack.attack_model = None
-        # attack_model = None
-        with open("log/model/exp_attack/mia_update.txt", "a") as wf:
-            res = [target_train_acc, target_test_acc,
-                   shadow_train_acc, shadow_test_acc, train_acc, test_acc, precision, recall, f1, AUC]
-            write_time(wf)
-            write_config(wf, opt)
-            write_res(wf, "NN-ATK-based", res)
-            write_spilt(wf)
-        print("Finish")
-        torch.cuda.empty_cache()
+        train_acc, test_acc, precision, recall= attack.train(epoch_train)  # train 100 epoch
+        print("acc: {:.4f}, pre: {:.4f}, rec: {:.4f}".format(test_acc, precision, recall))
+        dir = "csv_res_adp" if opt.adaptive else "csv_res"
+        change_csv("{}/{}/acc.csv".format(dir, opt.dataset), test_acc)
+        change_csv("{}/{}/pre.csv".format(dir, opt.dataset), precision)
+        change_csv("{}/{}/rec.csv".format(dir, opt.dataset), recall)
 
 
-    elif opt.mia_type == "metric-based":
+    elif opt.mia_type == "ft_metric":
         attack = AttackTrainingMetric(opt, target_train_loader, target_test_loader,
-                                      shadow_train_loader, shadow_test_loader, target_model, shadow_model, attack_model, device)
+                                      shadow_train_loader, shadow_test_loader, target_model, shadow_model, attack_model, opt.device)
 
         attack.parse_dataset()
 
@@ -300,26 +297,37 @@ for i in range(1):
 
         train_tuple0, test_tuple0, test_results0, train_tuple1, test_tuple1, test_results1, train_tuple2, test_tuple2, test_results2, train_tuple3, test_tuple3, test_results3 = attack.train()
         target_train_acc, target_test_acc, shadow_train_acc, shadow_test_acc = attack.original_performance
-
-        with open("log/model/exp_attack/mia_update.txt", "a") as wf:
-            res0 = [target_train_acc, target_test_acc,
-                    shadow_train_acc, shadow_test_acc, train_tuple0[0], test_tuple0[0], test_tuple0[1], test_tuple0[2], test_tuple0[3], test_tuple0[4]]
-            res1 = [target_train_acc, target_test_acc,
-                    shadow_train_acc, shadow_test_acc, train_tuple1[0], test_tuple1[0], test_tuple1[1], test_tuple1[2], test_tuple1[3], test_tuple1[4]]
-            res2 = [target_train_acc, target_test_acc,
-                    shadow_train_acc, shadow_test_acc, train_tuple2[0], test_tuple2[0], test_tuple2[1], test_tuple2[2], test_tuple2[3], test_tuple2[4]]
-            res3 = [target_train_acc, target_test_acc,
-                    shadow_train_acc, shadow_test_acc, train_tuple3[0], test_tuple3[0], test_tuple3[1], test_tuple3[2], test_tuple3[3], test_tuple3[4]]
-            res4 = [target_test_acc, test_tuple0[0], test_tuple1[0], test_tuple2[0], test_tuple3[0]]
-            write_time(wf)
-            write_config(wf, opt)
-            write_res(wf, "Metric-corr", res0)
-            write_res(wf, "Metric-conf", res1)
-            write_res(wf, "Metric-entr", res2)
-            write_res(wf, "Metric-ment", res3)
-            write_copy(wf, res4)
-            write_spilt(wf)
-        print("Finish")
+        opt.mia_type = "ft_conf"
+        print("acc: {:.4f}, pre: {:.4f}, rec: {:.4f}".format(test_tuple1[0], test_tuple1[1], test_tuple1[2]))
+        dir = "csv_res_adp" if opt.adaptive else "csv_res"
+        change_csv("{}/{}/acc.csv".format(dir, opt.dataset), test_tuple1[0])
+        change_csv("{}/{}/pre.csv".format(dir, opt.dataset), test_tuple1[1])
+        change_csv("{}/{}/rec.csv".format(dir, opt.dataset), test_tuple1[2])
+        opt.mia_type = "ft_entr"
+        print("acc: {:.4f}, pre: {:.4f}, rec: {:.4f}".format(test_tuple2[0], test_tuple2[1], test_tuple2[2]))
+        dir = "csv_res_adp" if opt.adaptive else "csv_res"
+        change_csv("{}/{}/acc.csv".format(dir, opt.dataset), test_tuple2[0])
+        change_csv("{}/{}/pre.csv".format(dir, opt.dataset), test_tuple2[1])
+        change_csv("{}/{}/rec.csv".format(dir, opt.dataset), test_tuple2[2])
+        # with open("log/model/exp_attack/mia_update.txt", "a") as wf:
+        #     res0 = [target_train_acc, target_test_acc,
+        #             shadow_train_acc, shadow_test_acc, train_tuple0[0], test_tuple0[0], test_tuple0[1], test_tuple0[2], test_tuple0[3], test_tuple0[4]]
+        #     res1 = [target_train_acc, target_test_acc,
+        #             shadow_train_acc, shadow_test_acc, train_tuple1[0], test_tuple1[0], test_tuple1[1], test_tuple1[2], test_tuple1[3], test_tuple1[4]]
+        #     res2 = [target_train_acc, target_test_acc,
+        #             shadow_train_acc, shadow_test_acc, train_tuple2[0], test_tuple2[0], test_tuple2[1], test_tuple2[2], test_tuple2[3], test_tuple2[4]]
+        #     res3 = [target_train_acc, target_test_acc,
+        #             shadow_train_acc, shadow_test_acc, train_tuple3[0], test_tuple3[0], test_tuple3[1], test_tuple3[2], test_tuple3[3], test_tuple3[4]]
+        #     res4 = [target_test_acc, test_tuple0[0], test_tuple1[0], test_tuple2[0], test_tuple3[0]]
+        #     write_time(wf)
+        #     write_config(wf, opt)
+        #     write_res(wf, "Metric-corr", res0)
+        #     write_res(wf, "Metric-conf", res1)
+        #     write_res(wf, "Metric-entr", res2)
+        #     write_res(wf, "Metric-ment", res3)
+        #     write_copy(wf, res4)
+        #     write_spilt(wf)
+        # print("Finish")
     elif opt.mia_type == "audit":
         atk_loader, atk_size = gain_data(target_model, shadow_model, target_loader, target_size, shadow_loader, shadow_size, not opt.maskPE, config, device)
         epoch_acc, best_acc = audit_data(atk_loader, atk_size, config, device)

@@ -173,10 +173,10 @@ class attackTraining():
 
             print('Epoch: %d, Train Acc: %.3f%% (%d/%d)' %
                   (e, 100.*correct/total, correct, total))
-            test_acc, precision, recall, f1, AUC = self.test()
+            test_acc, precision, recall = self.test()
             train_acc = 1.*correct/total
 
-        return train_acc, test_acc, precision, recall, f1, AUC
+        return train_acc, test_acc, precision, recall
 
     def test(self):
         self.attack_model.eval()
@@ -186,8 +186,9 @@ class attackTraining():
         tgt = []
         precision = 0
         recall = 0
-        f1 = 0
-        AUC = 0
+        TP = 0
+        FP = 0
+        FN = 0
         with torch.no_grad():
             for inputs, targets in self.attack_test_loader:
                 inputs, targets = inputs.to(
@@ -198,12 +199,11 @@ class attackTraining():
                 _, predicted = outputs.max(1)
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
-                pre += list(predicted.cpu())
-                tgt += list(targets.cpu())
+                TP += sum((predicted == 1) & (targets == 1))
+                FP += sum((predicted == 0) & (targets == 1))
+                FN += sum((predicted == 1) & (targets == 0))
             print('Test Acc: %.3f%% (%d/%d)' %
                   (100.*correct/total, correct, total))
-        # precision = metric.precision_score(tgt,pre)
-        # recall = metric.recall_score(tgt,pre)
-        # f1 = metric.f1_score(tgt,pre)
-        # AUC = metric.roc_auc_score(tgt,pre)
-        return 1.*correct/total, precision, recall, f1, AUC
+        precision = TP / (TP + FP)
+        recall = TP / (TP + FN)
+        return 1.*correct/total, precision.item(), recall.item()

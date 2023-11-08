@@ -1,29 +1,29 @@
 path:
-  data_path: '../data/ImageNet100/'
-  result_path: results/VIT_ImageNet100/
-  model_path: Network/VIT_Model_ImageNet100/
-  public_path: '../data/cinic-10/test/'
+  data_path: '/home/mkdzir/Pytorch/data/cifar-10/'
+  result_path: results/VIT_cifar10/
+  model_path: Network/VIT_Model_cifar10/
+  public_path: '/home/mkdzir/Pytorch/data/cinic-10/test'
 
 patch:
   image_size: 224
   patch_size: 16
   num_patches: 196
-  num_classes: 100
-  nums_per_class: [1000,200,100]
-  nums_per_class_train: 700
-  nums_per_class_val: 700
+  num_classes: 10
+  nums_per_class: [5000, 1000]
+  nums_per_class_train: 5000
+  nums_per_class_val: 1000
   channels: 3
-  fold_size: 224
-  fold_patch_size: 16
+  fold_size: 64
+  fold_patch_size: 8
   embed_dim: 384
-  depth: 8
+  depth: 12
   heads: 12
   mlp_dim: 512
   dropout: 0
-  emb_dropout: 0.
+  emb_dropout: 0
 
 general:
-  dataset: ImageNet100
+  dataset: CIFAR10
   use_cuda: Yes
   seed: 1001
   seed_target: 1234
@@ -35,18 +35,21 @@ general:
   mixup_alpha: 1
   cutmix_alpha: 1.0
 
-learning:
-#  batch_size: 128
-#  learning_rate: 0.001
+#目前最优 128/0.00185
+#可选 0.0016/0.0017/185
 
+
+learning:
   batch_size: 256
-  learning_rate: 0.0012
+#  learning_rate: 0.00185
+  #dpsgd
+  learning_rate: 0.001
   min_lr: 0.00001
   momentum: 0.9
   epochs: 30
-  decrease_lr_factor: 0.1
-  decrease_lr_every: 50
-  weight_decay: 0.00005
+  decrease_lr_factor: 0.5
+  decrease_lr_every: 10
+  weight_decay: 0
   beta1: 0.9
   beta2: 0.99
   warmup_epoch: 5
@@ -54,13 +57,14 @@ learning:
   DP: True
   atk_learning_rate: 0.001
   atk_epochs: 25
-  val_epoch: 5
+  val_epoch: True
+
 
 mask:
-    start: 10
-    step: 20
+    start: 138
+    step: 12
     stop: 196
-    warmup_epoch: 5
+    warmup_epoch: 10
     mask_ratio: 0.5
     jigsaw: 0.5
     num_masking_patches: 8

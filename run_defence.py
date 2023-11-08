@@ -23,16 +23,17 @@ args = parser.parse_args()
 nums = [0, 10, 20, 30, 40, 50]
 nums_list = [0, 10, 40, 70, 100, 130, 160, 190]
 nums_list2 = [0, 5, 10, 15, 20, 25, 30]
-nums3 = [0, 27, 54, 81, 108, 135, 162, 189]
+nums_list3 = [0, 27, 54, 108, 189, 196]
+ls_rate = [0.1, 0.2, 0.3]
 if args.nums >= 0:
     pad = " --istarget"
-    os.system("python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 main.py --dataset {} --nums {}".format(args.dataset,args.nums))
-    os.system("python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 main.py --dataset {} --nums {}{}".format(args.dataset, args.nums, pad))
+    os.system("python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 main_cp.py --dataset {} --nums {}".format(args.dataset,args.nums))
+    os.system("python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 main_cp.py --dataset {} --nums {}{}".format(args.dataset, args.nums, pad))
 else:
     for i in nums_list:
         pad = " --istarget"
-        os.system("python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 main.py --dataset {} --nums {}".format(args.dataset,i))
-        os.system("python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 main.py --dataset {} --nums {}{}".format(args.dataset, i, pad))
+        os.system("python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 main_cp.py --dataset {} --nums {}".format(args.dataset,i))
+        os.system("python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 main_cp.py --dataset {} --nums {}{}".format(args.dataset, i, pad))
 # args.dataset = "ImageNet10"
 # for i in nums_list:
 #     pad = " --istarget"

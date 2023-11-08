@@ -3,7 +3,6 @@ import argparse
 from PIL import Image
 
 import tim
-import tim_ff
 from torchvision import datasets, transforms
 
 from dataloader import get_loader, set2loader
@@ -26,12 +25,10 @@ def get_opt():
     parser.add_argument('--img_aug', type=str, default='pbf', help='if fill')
     parser.add_argument('--nums', type=int, default=0, help='if fill')
     parser.add_argument('--set', type=int, default=0, help='if fill')
-    parser.add_argument('--mix_up', action="store_true", help='use Mixup')
     parser.add_argument('--n_class', type=int, default=10, help='')
     parser.add_argument("--local-rank", type=int, default=0, help="number of cpu threads to use during batch generation")
     parser.add_argument("--defence", type=str, default='', help="defence method")
-    parser.add_argument("--istarget", action="store_false", help="defence method")
-    parser.add_argument('--gpu', type=str, default='cuda:0', help='if fill')
+    parser.add_argument("--istarget", action="store_false")
     opt = parser.parse_args()
     return opt
 
@@ -50,7 +47,7 @@ def gpu_init(opt):
         torch.cuda.set_device(opt.local_rank)
         device = torch.device("cuda", opt.local_rank)
     else:
-        device = torch.device(opt.gpu if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     return device
 
 
@@ -169,4 +166,3 @@ config.set_subkey('mask', 'mask_ratio', opt.nums / config.patch.num_patches)
 opt.mask_ratio = opt.nums / config.patch.num_patches
 data_loader, data_size = get_loader(opt.dataset, config, is_target=opt.istarget)
 mask_train_model(opt.model_type, opt, config, data_loader, data_size, is_target=opt.istarget)
-

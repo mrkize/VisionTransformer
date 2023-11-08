@@ -226,3 +226,511 @@ Acuracy: 2.0000     Precision: 2.0000     Recall: 2.0000
 cifar100        pbf_mask_0.000.pth     Atk_method: roll          metric: Euclid      Adaptive: True
 Acuracy: 2.0000     Precision: 2.0000     Recall: 2.0000
 ------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:30:38
+cifar100        pbf_mask_0.000.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.6996     Precision: 0.4641     Recall: 0.8773
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:33:46
+cifar100        pbf_mask_0.051.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.6712     Precision: 0.4578     Recall: 0.7986
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:36:55
+cifar100        pbf_mask_0.204.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.6797     Precision: 0.4601     Recall: 0.8203
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:40:02
+cifar100        pbf_mask_0.357.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.6871     Precision: 0.4607     Recall: 0.8420
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:43:11
+cifar100        pbf_mask_0.510.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.6838     Precision: 0.4709     Recall: 0.8200
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:46:20
+cifar100        pbf_mask_0.663.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.6891     Precision: 0.4657     Recall: 0.8419
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:49:29
+cifar100        pbf_mask_0.816.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.6814     Precision: 0.4573     Recall: 0.8287
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:52:37
+cifar100        pbf_mask_0.969.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.6806     Precision: 0.4414     Recall: 0.8461
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:56:03
+ImageNet100     pbf_mask_0.000.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.8946     Precision: 0.8318     Recall: 0.9513
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 10:59:28
+ImageNet100     pbf_mask_0.051.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.8910     Precision: 0.8409     Recall: 0.9344
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 11:02:54
+ImageNet100     pbf_mask_0.204.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.8374     Precision: 0.7015     Recall: 0.9633
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 11:06:22
+ImageNet100     pbf_mask_0.357.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.7985     Precision: 0.6169     Recall: 0.9687
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 11:09:50
+ImageNet100     pbf_mask_0.510.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.7755     Precision: 0.5599     Recall: 0.9843
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 11:13:19
+ImageNet100     pbf_mask_0.663.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.7616     Precision: 0.5351     Recall: 0.9784
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:13:07
+ImageNet100     pbf_mask_0.816.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.7447     Precision: 0.4983     Recall: 0.9825
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:16:39
+ImageNet100     pbf_mask_0.969.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: False
+Acuracy: 0.8110     Precision: 0.6549     Recall: 0.9522
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:17:56
+cifar10         pbf_mask_0.000.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0001     Recall: 0.1667
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:19:14
+cifar10         pbf_mask_0.051.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.4998     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:20:31
+cifar10         pbf_mask_0.204.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:21:48
+cifar10         pbf_mask_0.357.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:23:06
+cifar10         pbf_mask_0.510.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:24:23
+cifar10         pbf_mask_0.663.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:25:41
+cifar10         pbf_mask_0.816.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:26:58
+cifar10         pbf_mask_0.969.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:28:16
+cifar100        pbf_mask_0.000.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:29:34
+cifar100        pbf_mask_0.051.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:30:52
+cifar100        pbf_mask_0.204.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:32:09
+cifar100        pbf_mask_0.357.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:33:27
+cifar100        pbf_mask_0.510.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:34:45
+cifar100        pbf_mask_0.663.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:36:03
+cifar100        pbf_mask_0.816.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:37:20
+cifar100        pbf_mask_0.969.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:38:50
+ImageNet100     pbf_mask_0.000.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:40:20
+ImageNet100     pbf_mask_0.051.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:41:50
+ImageNet100     pbf_mask_0.204.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:43:20
+ImageNet100     pbf_mask_0.357.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:44:50
+ImageNet100     pbf_mask_0.510.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:46:19
+ImageNet100     pbf_mask_0.663.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:47:47
+ImageNet100     pbf_mask_0.816.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:49:17
+ImageNet100     pbf_mask_0.969.pth     Atk_method: out           metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:50:51
+cifar10         pbf_mask_0.000.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:52:27
+cifar10         pbf_mask_0.051.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:54:02
+cifar10         pbf_mask_0.204.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:55:36
+cifar10         pbf_mask_0.357.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:57:12
+cifar10         pbf_mask_0.510.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 13:58:47
+cifar10         pbf_mask_0.663.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:00:21
+cifar10         pbf_mask_0.816.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:01:56
+cifar10         pbf_mask_0.969.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:03:31
+cifar100        pbf_mask_0.000.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4998     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:05:05
+cifar100        pbf_mask_0.051.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:06:40
+cifar100        pbf_mask_0.204.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:08:14
+cifar100        pbf_mask_0.357.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:09:48
+cifar100        pbf_mask_0.510.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:11:23
+cifar100        pbf_mask_0.663.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:12:58
+cifar100        pbf_mask_0.816.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:14:32
+cifar100        pbf_mask_0.969.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4998     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:16:25
+ImageNet100     pbf_mask_0.000.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:18:17
+ImageNet100     pbf_mask_0.051.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:20:11
+ImageNet100     pbf_mask_0.204.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:22:03
+ImageNet100     pbf_mask_0.357.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:23:54
+ImageNet100     pbf_mask_0.510.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:25:43
+ImageNet100     pbf_mask_0.663.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:27:33
+ImageNet100     pbf_mask_0.816.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:29:22
+ImageNet100     pbf_mask_0.969.pth     Atk_method: roll          metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:30:47
+cifar10         pbf_mask_0.000.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.4997     Precision: 0.9992     Recall: 0.4998
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:32:13
+cifar10         pbf_mask_0.051.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.4998     Precision: 0.9993     Recall: 0.4999
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:33:38
+cifar10         pbf_mask_0.204.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.9999     Recall: 0.5000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:35:03
+cifar10         pbf_mask_0.357.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.9997     Recall: 0.4999
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:36:28
+cifar10         pbf_mask_0.510.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 1.0000     Recall: 0.5000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:37:54
+cifar10         pbf_mask_0.663.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 1.0000     Recall: 0.5000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:39:19
+cifar10         pbf_mask_0.816.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.9999     Recall: 0.5000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:40:44
+cifar10         pbf_mask_0.969.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.9998     Recall: 0.5000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:42:10
+cifar100        pbf_mask_0.000.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:43:35
+cifar100        pbf_mask_0.051.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:45:00
+cifar100        pbf_mask_0.204.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:46:25
+cifar100        pbf_mask_0.357.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:47:51
+cifar100        pbf_mask_0.510.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:49:16
+cifar100        pbf_mask_0.663.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:50:41
+cifar100        pbf_mask_0.816.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:52:06
+cifar100        pbf_mask_0.969.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:53:40
+ImageNet100     pbf_mask_0.000.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.4999     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:55:15
+ImageNet100     pbf_mask_0.051.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:56:50
+ImageNet100     pbf_mask_0.204.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:58:25
+ImageNet100     pbf_mask_0.357.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 14:59:59
+ImageNet100     pbf_mask_0.510.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:01:34
+ImageNet100     pbf_mask_0.663.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:03:09
+ImageNet100     pbf_mask_0.816.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:04:43
+ImageNet100     pbf_mask_0.969.pth     Atk_method: last_attn     metric: Euclid      Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: nan
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:07:51
+cifar10         pbf_mask_0.000.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.9093     Precision: 0.9463     Recall: 0.8811
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:10:59
+cifar10         pbf_mask_0.051.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8843     Precision: 0.8606     Recall: 0.9034
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:14:07
+cifar10         pbf_mask_0.204.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8510     Precision: 0.9439     Recall: 0.7960
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:17:16
+cifar10         pbf_mask_0.357.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8712     Precision: 0.9277     Recall: 0.8334
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:20:24
+cifar10         pbf_mask_0.510.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8251     Precision: 0.8380     Recall: 0.8170
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:23:33
+cifar10         pbf_mask_0.663.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.7910     Precision: 0.8637     Recall: 0.7540
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:26:40
+cifar10         pbf_mask_0.816.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.7560     Precision: 0.9769     Recall: 0.6775
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:29:48
+cifar10         pbf_mask_0.969.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.7704     Precision: 0.9545     Recall: 0.6976
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:32:57
+cifar100        pbf_mask_0.000.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.9072     Precision: 0.9505     Recall: 0.8748
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:36:05
+cifar100        pbf_mask_0.051.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8224     Precision: 0.9573     Recall: 0.7540
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:39:14
+cifar100        pbf_mask_0.204.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8553     Precision: 0.9203     Recall: 0.8144
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:42:22
+cifar100        pbf_mask_0.357.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8268     Precision: 0.7723     Recall: 0.8667
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:45:31
+cifar100        pbf_mask_0.510.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8133     Precision: 0.7321     Recall: 0.8740
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:48:35
+cifar100        pbf_mask_0.663.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.7825     Precision: 0.6928     Recall: 0.8443
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:51:39
+cifar100        pbf_mask_0.816.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.7170     Precision: 0.6739     Recall: 0.7374
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:54:43
+cifar100        pbf_mask_0.969.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.7264     Precision: 0.8100     Recall: 0.6940
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 15:58:13
+ImageNet100     pbf_mask_0.000.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.9436     Precision: 0.9671     Recall: 0.9238
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 16:01:43
+ImageNet100     pbf_mask_0.051.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.9238     Precision: 0.9515     Recall: 0.9015
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 16:05:13
+ImageNet100     pbf_mask_0.204.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.9194     Precision: 0.9879     Recall: 0.8688
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 16:08:43
+ImageNet100     pbf_mask_0.357.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.9309     Precision: 0.9641     Recall: 0.9041
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 16:12:13
+ImageNet100     pbf_mask_0.510.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.9595     Precision: 0.9901     Recall: 0.9330
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 16:15:43
+ImageNet100     pbf_mask_0.663.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.9300     Precision: 0.9765     Recall: 0.8934
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 16:19:12
+ImageNet100     pbf_mask_0.816.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8390     Precision: 0.9616     Recall: 0.7723
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 16:22:41
+ImageNet100     pbf_mask_0.969.pth     Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.8297     Precision: 0.8893     Recall: 0.7946
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 16:25:49
+cifar10         pbf_mask_0.000.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: True
+Acuracy: 0.8803     Precision: 0.8555     Recall: 0.9002
+------------------------------------------------------------------------------------------------------------------------
+2023-11-02 16:28:58
+cifar10         pbf_mask_0.051.pth     Atk_method: last_attn_nn  metric: Euclid      Adaptive: True
+Acuracy: 0.8603     Precision: 0.7577     Recall: 0.9533
+------------------------------------------------------------------------------------------------------------------------
+2023-11-03 12:03:20
+cifar100        pbf_mask_0.000.pth     Atk_method: out           metric: cos-sim     Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-03 12:06:32
+cifar100        pbf_mask_0.000.pth     Atk_method: out           metric: cos-sim     Adaptive: False
+Acuracy: 0.8410     Precision: 0.8850     Recall: 0.8134
+------------------------------------------------------------------------------------------------------------------------
+2023-11-03 12:34:56
+cifar100        pbf_mask_0.000.pth     Atk_method: out           metric: cos-sim     Adaptive: False
+Acuracy: 0.5000     Precision: 0.0000     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-03 12:37:07
+cifar100        pbf_mask_0.000.pth     Atk_method: out           metric: cos-sim     Adaptive: False
+Acuracy: 0.4997     Precision: 0.9994     Recall: 0.4998
+------------------------------------------------------------------------------------------------------------------------
+2023-11-03 12:46:35
+cifar100        pbf_mask_0.000.pth     Atk_method: out           metric: cos-sim     Adaptive: False
+Acuracy: 0.4997     Precision: 0.9994     Recall: 0.4998
+------------------------------------------------------------------------------------------------------------------------
+2023-11-03 12:50:22
+cifar100        pbf_mask_0.000.pth     Atk_method: out           metric: cos-sim     Adaptive: False
+Acuracy: 0.4997     Precision: 0.4998     Recall: 0.9994
+------------------------------------------------------------------------------------------------------------------------
+2023-11-03 12:53:09
+cifar100        pbf_mask_0.000.pth     Atk_method: out           metric: cos-sim     Adaptive: False
+Acuracy: 0.8410     Precision: 0.8134     Recall: 0.8850
+------------------------------------------------------------------------------------------------------------------------
+2023-11-06 17:24:44
+cifar10         Basic.pth              Atk_method: roll          metric: Euclid      Adaptive: True
+Acuracy: 0.5000     Precision: nan     Recall: 0.0000
+------------------------------------------------------------------------------------------------------------------------
+2023-11-06 17:49:28
+cifar10         Basic.pth              Atk_method: roll_nn       metric: Euclid      Adaptive: True
+Acuracy: 0.9084     Precision: 0.9308     Recall: 0.8908
+------------------------------------------------------------------------------------------------------------------------
+2023-11-06 17:53:12
+cifar10         Basic.pth              Atk_method: out           metric: Euclid      Adaptive: True
+Acuracy: 0.4995     Precision: 0.0588     Recall: 0.0001
+------------------------------------------------------------------------------------------------------------------------
+2023-11-06 17:55:50
+cifar10         Basic.pth              Atk_method: out           metric: cos-sim     Adaptive: True
+Acuracy: 0.7037     Precision: 0.6984     Recall: 0.7173
+------------------------------------------------------------------------------------------------------------------------
+2023-11-06 17:57:35
+cifar10         Basic.pth              Atk_method: roll          metric: cos-sim     Adaptive: True
+Acuracy: 0.8843     Precision: 0.8625     Recall: 0.9143
+------------------------------------------------------------------------------------------------------------------------
+2023-11-06 18:00:50
+cifar10         Basic.pth              Atk_method: out_nn        metric: cos-sim     Adaptive: True
+Acuracy: 0.9573     Precision: 0.9657     Recall: 0.9498
+------------------------------------------------------------------------------------------------------------------------

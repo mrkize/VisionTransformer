@@ -209,6 +209,26 @@ class imageNet100(Dataset):
         return self.dataset[idx][0], self.dataset[idx][1]
 
 
+class imageNet(Dataset):
+    def __init__(self, root_dir, split, num_class, nums_per_class,random_seed = 1001, is_target=True, set=0):
+        self.Transform = transforms.Compose([transforms.Resize([224, 224]),
+                                             # transforms.RandomHorizontalFlip(),
+                                             transforms.ToTensor(),
+                                             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+        # Output of pretransform should be PIL images
+        self.data_dir = root_dir
+        if split == 'train':
+            self.dataset = datasets.ImageFolder(self.data_dir+'train', self.Transform)
+        else:
+            self.dataset = datasets.ImageFolder(self.data_dir+'test', self.Transform)
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        return self.dataset[idx][0], self.dataset[idx][1]
+    
+
 class cinic_dataset(Dataset):
 
     def __init__(self, root_dir, split, num_class=10, nums_per_class=9000,random_seed = 1001, is_target=True ,seed=1001):
@@ -242,30 +262,31 @@ class cinic_split_dataset(Dataset):
                                              transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
         # Output of pretransform should be PIL images
         self.root_dir = root_dir
-        train_set_1, train_set_2 = data_split(datasets.ImageFolder(self.root_dir+'train', self.Transform), num_class, nums_per_class[0], seed)
-        val_set_1, val_set_2 = data_split(datasets.ImageFolder(self.root_dir+'val', self.Transform), num_class, nums_per_class[1], seed)
-        if first:
-            if split == 'train':
-                if is_target:
-                    self.dataset = train_set_1
-                else:
-                    self.dataset = val_set_1
-            elif split == 'val':
-                if is_target:
-                    self.dataset = val_set_1
-                else:
-                    self.dataset = train_set_1
-        else:
-            if split == 'train':
-                if is_target:
-                    self.dataset = train_set_2
-                else:
-                    self.dataset = val_set_2
-            elif split == 'val':
-                if is_target:
-                    self.dataset = val_set_2
-                else:
-                    self.dataset = train_set_2
+        train_set = data_split_2(datasets.ImageFolder(self.root_dir+'train', self.Transform), num_class, 9000,1000, seed)
+        # val_set_1, val_set_2 = data_split_2(datasets.ImageFolder(self.root_dir+'val', self.Transform), num_class, 9000,1000, seed)
+        self.dataset = train_set
+        # if first:
+        #     if split == 'train':
+        #         if is_target:
+        #             self.dataset = train_set_1
+        #         else:
+        #             self.dataset = val_set_1
+        #     elif split == 'val':
+        #         if is_target:
+        #             self.dataset = val_set_1
+        #         else:
+        #             self.dataset = train_set_1
+        # else:
+        #     if split == 'train':
+        #         if is_target:
+        #             self.dataset = train_set_2
+        #         else:
+        #             self.dataset = val_set_2
+        #     elif split == 'val':
+        #         if is_target:
+        #             self.dataset = val_set_2
+        #         else:
+        #             self.dataset = train_set_2
 
     def __len__(self):
         return len(self.dataset)
@@ -322,14 +343,24 @@ def get_loader(dataset, config, is_target, cif=True, set = 0):
         # train_set = Subset(train_set, range(10))
         # val_set = Subset(val_set, range(10))
 
-    elif dataset == 'cinic10':
+    elif dataset == 'cinic':
         train_set = cinic_dataset(root_dir=config.path.data_path, split='train', is_target=is_target,
                                   seed=config.general.seed)[:1]
         val_set = cinic_dataset(root_dir=config.path.data_path, split='val', is_target=is_target,
                                 seed=config.general.seed)[:1]
-    elif dataset == 'STL10':
-        train_set = STL10_dataset(root_dir=config.path.data_path, split='train',is_target=is_target)
-        val_set = STL10_dataset(root_dir=config.path.data_path, split='val',is_target=is_target)
+    elif dataset == 'ImageNet':
+        train_set = imageNet(root_dir=config.path.data_path, split='train',
+                             num_class=config.patch.num_classes,
+                             nums_per_class=config.patch.nums_per_class,
+                             is_target=is_target,
+                             random_seed=config.general.seed,
+                             set=set)
+        val_set = imageNet(root_dir=config.path.data_path, split='val',
+                           num_class=config.patch.num_classes,
+                           nums_per_class=config.patch.nums_per_class,
+                           is_target=is_target,
+                           random_seed=config.general.seed,
+                           set=set)
     elif dataset == 'ImageNet10':
         train_set = imageNet10(root_dir=config.path.data_path, split='train', is_target=is_target,
                                seed=config.general.seed)
@@ -349,7 +380,7 @@ def get_loader(dataset, config, is_target, cif=True, set = 0):
                            set=set)
         # train_set = Subset(train_set, range(1000))
         # val_set = Subset(val_set, range(1000))
-    elif dataset == 'cinic':
+    elif dataset == 'cinic10':
         train_set = cinic_split_dataset(root_dir=config.path.data_path, split='train', num_class =config.patch.num_classes,
                                         nums_per_class=config.patch.nums_per_class,first=cif,
                                         is_target=is_target,seed=config.general.seed)

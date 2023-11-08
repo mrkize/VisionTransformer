@@ -5,7 +5,6 @@ import datetime
 import numpy as np
 import torch.nn.functional as F
 import torch
-import tim_ff
 from timm.loss import SoftTargetCrossEntropy
 from torch.utils.data import TensorDataset
 from tqdm import tqdm
@@ -84,11 +83,33 @@ def change_csv(dir, value):
         writer.writeheader()
         writer.writerows(rows)
 
-    
+
+def change_metric_csv(dir, value):
+    rows = []
+    with open(dir, 'r') as file:
+        reader = csv.DictReader(file)
+        rows = list(reader)
+    for row in rows:
+        if row['dataset'] == args.dataset and row['atk_method'] == args.atk_method:
+            row["mem_max"] = round(value[0], 4)
+            row["mem_min"] = round(value[1], 4)
+            row["mem_mean"] = round(value[2], 4)
+            row["nomem_max"] = round(value[3], 4)
+            row["nomem_min"] = round(value[4], 4)
+            row["nomem_mean"] = round(value[5], 4)
+
+
+    fieldnames = rows[0].keys()
+    with open(dir, 'w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--use_cuda', action='store_true', default=True)
-    parser.add_argument('--dataset', type=str, default='ImageNet10',help='attack dataset')
+    parser.add_argument('--dataset', type=str, default='cifar100',help='attack dataset')
     parser.add_argument('--model', type=str, default="pbf_mask_0.000.pth")
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--num_class', type=int, default=100)
@@ -96,13 +117,15 @@ def get_args():
     parser.add_argument('--head_fusion', type=str, default='mean')
     parser.add_argument('--discard_ratio', type=float, default=0)
     parser.add_argument('--addnoise', action='store_true', default=False)
-    parser.add_argument('--metric', type=str, default="pearson")
-    parser.add_argument('--atk_method', type=str, default="metric_attn")
+    parser.add_argument('--metric', type=str, default="cos-sim")
+    parser.add_argument('--atk_method', type=str, default="metric_last_attn")
     parser.add_argument('--lr', type=float, default=0.004)
     parser.add_argument("--local-rank", type=int, default=0, help="number of cpu threads to use during batch generation")
     parser.add_argument('--noise_nums', type=int, default=10)
     parser.add_argument('--adaptive', action='store_true', default=False)
     parser.add_argument('--gpu', type=str, default='cuda:0')
+    parser.add_argument('--defence', type=str, default='')
+    parser.add_argument('--shadow', type=str, default='')
     args = parser.parse_args()
     args.use_cuda = args.use_cuda and torch.cuda.is_available()
     return args
@@ -158,13 +181,13 @@ def CrossEntropy(x, target):
     return loss
 
 
-def precision(y_true, y_pred):
+def precision(y_pred, y_true):
     true_positives = torch.sum((y_true == 1) & (y_pred == 1))
     false_positives = torch.sum((y_true == 0) & (y_pred == 1))
     return true_positives / (true_positives + false_positives)
 
 
-def recall(y_true, y_pred):
+def recall(y_pred, y_true):
     true_positives = torch.sum((y_true == 1) & (y_pred == 1))
     false_negatives = torch.sum((y_true == 1) & (y_pred == 0))
     return true_positives / (true_positives + false_negatives)
@@ -186,47 +209,39 @@ def switch_fused_attn(model):
     return model
 
 
+def get_tar_sha_model(args, config):
+    if args.defence != "":
+        root = "defence_model/{}/".format(args.dataset)
+        config.set_subkey('path', 'model_path', root)
+        target_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
+        target_model.load_state_dict(torch.load(config.path.model_path + args.model))
+        shadow_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
+        shadow_model.load_state_dict(torch.load(config.path.model_path + args.shadow))
+    else:
+        target_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
+        target_model.load_state_dict(torch.load(config.path.model_path + args.model))
+        shadow_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
+        shadow_model.load_state_dict(torch.load(config.path.model_path + args.shadow))
+        if args.adaptive:
+            shadow_model.load_state_dict(torch.load(config.path.model_path + args.model[:-4] + "_shadow.pth"))
+        elif args.shadow == "":
+            shadow_model.load_state_dict(torch.load(config.path.model_path + args.model[:-7] + "000_shadow.pth"))
+        return target_model, shadow_model
+
+
 def init_config_model_attn(args):
     config = MyConfig.MyConfig(path=config_dict[args.dataset])
     config.set_subkey('learning', 'DP', False)
     config.set_subkey('learning', 'DDP', False)
-    config.set_subkey('learning', 'batch_size', 256)
     args.device = gpu_init(config, args)
-    # args.device = torch.device('cpu')
     args.num_class = dataset_class_dict[args.dataset]
-    target_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
-    target_model.load_state_dict(torch.load(config.path.model_path + args.model))
-    shadow_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
-    if args.adaptive:
-        shadow_model.load_state_dict(torch.load(config.path.model_path + args.model[:-4]+"_shadow.pth"))
-    else:
-        shadow_model.load_state_dict(torch.load(config.path.model_path + args.model[:-7] + "000_shadow.pth"))
+    target_model, shadow_model = get_tar_sha_model(args, config)
     if "attn" in args.atk_method or "roll" in args.atk_method:
         target_model = switch_fused_attn(target_model)
         shadow_model = switch_fused_attn(shadow_model)
     # target_model, shadow_model = target_model.to(args.device), shadow_model.to(args.device)
-    if config.learning.DDP:
-        target_model = torch.nn.parallel.DistributedDataParallel(target_model, device_ids=[args.local_rank],
-                                                                 output_device=args.local_rank,
-                                                                 find_unused_parameters=True)
-        # print('lr:',config.learning.learning_rate)
-        shadow_model = torch.nn.parallel.DistributedDataParallel(shadow_model, device_ids=[args.local_rank],
-                                                                 output_device=args.local_rank,
-                                                                 find_unused_parameters=True)
-    elif config.learning.DP:
-        target_model=torch.nn.DataParallel(target_model, device_ids=[0,1])
-        shadow_model=torch.nn.DataParallel(shadow_model, device_ids=[0,1])
-
-    # target_rollout = None
-    # shadow_rollout = None
-    if config.learning.DP or config.learning.DP:
-        target = target_model.module
-        shadow = shadow_model.module
-    else:
-        target = target_model
-        shadow = shadow_model
-    target_rollout = VITAttentionRollout(target, head_fusion=args.head_fusion, discard_ratio=args.discard_ratio, device=args.device)
-    shadow_rollout = VITAttentionRollout(shadow, head_fusion=args.head_fusion, discard_ratio=args.discard_ratio, device=args.device)
+    target_rollout = VITAttentionRollout(target_model, head_fusion=args.head_fusion, discard_ratio=args.discard_ratio, device=args.device)
+    shadow_rollout = VITAttentionRollout(shadow_model, head_fusion=args.head_fusion, discard_ratio=args.discard_ratio, device=args.device)
     return config, args, target_model, shadow_model, target_rollout, shadow_rollout
 
 
@@ -260,7 +275,7 @@ def gpu_init(config, opt):
         torch.cuda.set_device(opt.local_rank)
         device = torch.device("cuda", opt.local_rank)
     else:
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        device = torch.device(args.gpu if torch.cuda.is_available() else "cpu")
     return device
 
 
@@ -274,15 +289,19 @@ def find_best_threshold(data, labels):
             continue
         threshold = (sorted_data[i] + sorted_data[i+1]) / 2.0
         predicted_labels = (data <= threshold).to(torch.int32)
+        # print(predicted_labels.sum().item())
         accuracy = (predicted_labels == labels).to(torch.float32).mean()
         if accuracy > best_accuracy:
             best_accuracy = accuracy
             best_threshold = threshold
+    # predicted_labels = (data >= best_threshold).to(torch.int32)
+    # print(predicted_labels.sum().item())
     return best_threshold
 
 
 def calculate_accuracy(data, labels, threshold):
     predicted_labels = (data <= threshold).to(torch.int32)
+    # print(predicted_labels.sum().item())
     accuracy = (predicted_labels == labels).to(torch.float32).mean()
     pre = precision(predicted_labels, labels)
     rec = recall(predicted_labels, labels)
@@ -314,20 +333,25 @@ def get_data(model, attention_rollout, loader, atk_method):
         elif args.metric == "Euclid":
             metric_train_repeat = torch.norm(attn_origin_train - attn_train, dim=1)
             metric_val_repeat = torch.norm(attn_origin_val - attn_val, dim=1)
-            metric_train_repeat = map_to_range(metric_train_repeat)
-            metric_val_repeat = map_to_range(metric_val_repeat)
+            # metric_train_repeat = map_to_range(metric_train_repeat)
+            # metric_val_repeat = map_to_range(metric_val_repeat)
         # 计算交叉熵
         elif args.metric == "CE":
             metric_train_repeat = CrossEntropy(attn_origin_train, attn_train)
             metric_val_repeat = CrossEntropy(attn_origin_val, attn_val)
-            metric_train_repeat = map_to_range(metric_train_repeat)
-            metric_val_repeat = map_to_range(metric_val_repeat)
+            # metric_train_repeat = map_to_range(metric_train_repeat)
+            # metric_val_repeat = map_to_range(metric_val_repeat)
         # 余弦相似度
-        else:
+        elif args.metric == "cos-sim":
             metric_train_repeat = torch.cosine_similarity(attn_origin_train,attn_train,dim=1)
             metric_val_repeat = torch.cosine_similarity(attn_origin_val, attn_val, dim=1)
+
+        else:
+            print("not support metric!")
+            exit(0)
         train_res_list.append(metric_train_repeat)
         val_res_list.append(metric_val_repeat)
+
 
     if "nn" not in atk_method:
         train_res = sum(train_res_list) / args.noise_repeat
@@ -396,7 +420,6 @@ def predict(model, loader, size):
     print("Val acc {:.5f}.".format(acc))
     prec = TP / (TP + FP)
     reca = TP / (TP + FN)
-    print(acc, prec, reca)
     return acc.item(), prec.item(), reca.item()
 
 
@@ -435,20 +458,26 @@ def attn_rollout_atk_nn(args):
     args.epochs = 25
     args.lr = 0.002
     ###
-    # if args.dataset == "cifar100":
-    #     args.noise_repeat = 3
-    #     args.epochs = 25
-    #     args.lr = 0.005
+    if args.metric == "Euclid" and "attn" in args.atk_method:
+        args.noise_repeat = 3
+        args.epochs = 200
+        args.lr = 0.00025
+    elif args.metric == "CE" and "attn" in args.atk_method:
+        args.noise_repeat = 3
+        args.epochs = 50
+        args.lr = 0.0005
     config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     sha_dataset, sha_target = get_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
     tra_dataset = torch.utils.data.TensorDataset(sha_dataset, sha_target)
     train_loader = torch.utils.data.DataLoader(tra_dataset, batch_size=256, shuffle=True)
-    #
+    # # # #
     # torch.save(train_loader, "pt/train_loader.pt")
     # torch.save(tra_dataset, "pt/tra_dataset.pt")
+
     # train_loader = torch.load("pt/train_loader.pt")
     # tra_dataset = torch.load("pt/tra_dataset.pt")
+
     atk_model = classifier(args.noise_repeat).to(args.device)
     atk_model = train(atk_model, train_loader, len(tra_dataset), args.epochs)
 
@@ -456,9 +485,10 @@ def attn_rollout_atk_nn(args):
     tar_dataset, tar_target = get_data(target_model, target_rollout, tar_loader, args.atk_method)
     val_dataset = torch.utils.data.TensorDataset(tar_dataset, tar_target)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=256, shuffle=False)
-    #
+    # # #
     # torch.save(val_loader, "pt/val_loader.pt")
     # torch.save(val_dataset, "pt/val_dataset.pt")
+
     # val_loader = torch.load("pt/val_loader.pt")
     # val_dataset = torch.load("pt/val_dataset.pt")
 
@@ -559,12 +589,28 @@ def get_metric(args):
     args.noise_repeat = 4
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     train_res, val_res = get_data(target_model, target_rollout, tar_loader, args.atk_method)
-    torch.save(train_res, "pt/train_res.pt")
-    torch.save(val_res, "pt/val_res.pt")
+    # torch.save(train_res, "pt/train_res.pt")
+    # torch.save(val_res, "pt/val_res.pt")
     # train_res, val_res = torch.load("pt/train_res.pt"), torch.load("pt/val_res.pt")
     train_res = train_res.cpu().numpy()
     val_res = val_res.cpu().numpy()
     return train_res.max(), train_res.min(), train_res.mean(), val_res.max(), val_res.min(), val_res.mean()
+
+
+def change_csv2(dir, value):
+    rows = []
+    with open(dir, 'r') as file:
+        reader = csv.DictReader(file)
+        rows = list(reader)
+    for row in rows:
+        if row['target'] == args.model:
+            row[args.shadow] = round(value, 4)
+
+    fieldnames = rows[0].keys()
+    with open(dir, 'w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 torch.random.manual_seed(1333)
@@ -579,17 +625,27 @@ elif args.atk_method == "predict":
 elif "nn" in args.atk_method:
     res = attn_rollout_atk_nn(args)
 elif "metric" in args.atk_method:
-    args.model = "pbf_mask_0.969.pth"
+    args.model = "pbf_mask_0.000.pth"
     res = get_metric(args)
+    # print(res)
+    # res = (10,20,30,40,50,60)
+    dir = "metric_adp" if args.adaptive else "metric"
+    change_metric_csv("metric/{}/{}.csv".format(dir, args.metric), res)
+    exit(0)
 else:
     res = 0, 0, 0
 # res = 3.1234124, 3.1234124, 3.1234124
-dir = "csv_res_adp" if args.adaptive else "csv_res"
+# dir = "csv_res_adp" if args.adaptive else "csv_res"
 change_csv("{}/{}/acc.csv".format(dir, args.dataset), res[0])
-change_csv("{}/{}/pre.csv".format(dir, args.dataset), res[1])
-change_csv("{}/{}/rec.csv".format(dir, args.dataset), res[2])
+# change_csv("{}/{}/pre.csv".format(dir, args.dataset), res[1])
+# change_csv("{}/{}/rec.csv".format(dir, args.dataset), res[2])
 # write_time()
 # write_config(args)
 # write_res(res)
 # write_spilt()
 # wf.close()
+
+dir = "confound_cifar100/{}.csv".format(args.defence)
+change_csv("confound_cifar100/acc/{}.csv".format(args.defence), res[0])
+change_csv("confound_cifar100/pre/{}.csv".format(args.defence), res[1])
+change_csv("confound_cifar100/rec/{}.csv".format(args.defence), res[2])
