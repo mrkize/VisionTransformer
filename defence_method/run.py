@@ -30,7 +30,7 @@ model_names3 = ["pbf_mask_0.{}.pth".format(i) for i in nums_3]
 model_names4 = ["pbf_mask_0.{}.pth".format(i) for i in nums_4]
 pad = " --adaptive" if args.adaptive else ""
 atk_list = ["roll_nn", "last_attn_nn", "out", "roll", "last_attn"]
-dataset_list = ["cifar10", "cifar100", "ImageNet100"]
+dataset_list = ["cifar100", "ImageNet100"]
 metric_list = ["metric_roll", "metric_last_attn", "metric_out"]
 mia_type_list = ["ft_nn", "ft_metric"]
 metric = ["Euclid", "CE"]
@@ -74,13 +74,13 @@ def mark(mul, name):
 
 
 # run PEdrop
-nums_list = [100, 120, 140, 160]
-for dataset in dataset_list:
-    for nums in nums_list:
-        os.system(
-            " python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 PEdrop.py --dataset {} --nums {}".format(dataset, nums))
-        os.system(
-            " python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 PEdrop.py --dataset {} --nums {} --istarget".format(dataset, nums))
+# nums_list = [100, 120, 140, 160]
+# for dataset in dataset_list:
+#     for nums in nums_list:
+#         os.system(
+#             " python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 PEdrop.py --dataset {} --nums {}".format(dataset, nums))
+#         os.system(
+#             " python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 PEdrop.py --dataset {} --nums {} --istarget".format(dataset, nums))
         
 
 # run DPSGD

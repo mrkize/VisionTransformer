@@ -2,7 +2,7 @@ import sys
 sys.path.append("..")
 import argparse
 from PIL import Image
-from pyvacy import optim, analysis
+import tim
 from dataloader import get_loader
 import torch
 from utils import MyConfig
@@ -13,6 +13,7 @@ import torch.nn as nn
 import numpy as np
 import time
 from torch.cuda.amp import autocast, GradScaler
+
 
 def get_opt():
     parser = argparse.ArgumentParser('argument for training')
@@ -88,53 +89,72 @@ def predict(model, dataloaders, dataset_sizes, device, is_img=False):
             labels = torch.squeeze(labels)
         running_corrects += preds.eq(labels).sum().item()
     acc = 1.0 * running_corrects / dataset_sizes
-    # print("acc:{:.5f}".format(acc))
     return acc
 
 
 
 
 def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, config, opt):
-    print("DATASET SIZE", size)
     scalar = GradScaler()
+    print("DATASET SIZE", size)
     val_criterion = nn.CrossEntropyLoss()
     since = time.time()
     ret_value = np.zeros((4, config.learning.epochs))
     for epoch in range(config.learning.epochs):
         if opt.local_rank == 0:
             print('Epoch {}/{}'.format(epoch, config.learning.epochs - 1))
-        if config.learning.DDP:
-            loader["train"].sampler.set_epoch(epoch)
-        model.train()
-        scheduler.step()
-        running_corrects = 0
-        for (inputs, labels) in loader["train"]:
-            inputs, labels = inputs.to(opt.device), labels.to(opt.device)
-            optimizer.zero_grad()
-            if epoch >= 20:
-                for sample in zip(inputs, labels):
-                    with autocast():
-                        x,y = sample
-                        optimizer.zero_grad()
-                        outputs = model(x[None], unk_mask=None)
-                        loss = criterion(outputs, y[None])
-                    loss.backward()
-                    for param in model.parameters():
-                        torch.nn.utils.clip_grad_norm_(param.grad, max_norm=opt.l2_norm_clip)  # in-place
-    
-                for param in model.parameters():
-                    noise = torch.empty_like(param.grad).data.normal_(0, opt.noise_multiplier *opt.l2_norm_clip).to(opt.device)
-                    param.grad = (param.grad + noise)/config.learning.batch_size
-                    param.grad = scalar.scale(param.grad)
+    # Each epoch has a training and validation phase
+        for phase in ['train']:
+            if phase == 'train':
+                if config.learning.DDP:
+                    loader[phase].sampler.set_epoch(epoch)
+                model.train()  # Set model to training mode
+                scheduler.step()
             else:
+                model.eval()
+            running_loss = 0.0
+            running_corrects = 0
+            # Iterate over data.
+            for batch_idx, (data, target) in enumerate(loader[phase]):
+                inputs, labels = data.to(opt.device), target.to(opt.device)
+                unk_mask = None
+                if phase == 'train':
+                    if mixup_fn is not None:
+                        inputs, labels = mixup_fn(inputs, labels)
+                optimizer.zero_grad()
+                if epoch >= 20:
+                    for sample in zip(inputs, labels):
+                        with autocast():
+                            x,y = sample
+                            optimizer.zero_grad()
+                            outputs = model(x[None], unk_mask=None)
+                            loss = criterion(outputs, y[None])
+                        loss.backward()
+                        for param in model.parameters():
+                            torch.nn.utils.clip_grad_norm_(param.grad, max_norm=opt.l2_norm_clip)  # in-place
+
+                    for param in model.parameters():
+                        noise = torch.empty_like(param.grad).data.normal_(0, opt.noise_multiplier *opt.l2_norm_clip).to(opt.device)
+                        param.grad = (param.grad + noise)/config.learning.batch_size
+                        optimizer.step()
+                else:
+                    with autocast():
+                        outputs = model(inputs, unk_mask=unk_mask)
+                        loss = criterion(outputs, labels)
+                        
+                
                 with autocast():
-                    outputs = model(inputs, unk_mask=None)
-                    loss = criterion(outputs, labels)
                     scalar.scale(loss).backward()
-            with autocast():
-                scalar.step(optimizer)
-                scalar.update()
-        # print("train{} acc: {:.5f}".format(opt.local_rank, predict(model, loader["train"], size["train"], opt.device)))
+                    scalar.step(optimizer)
+                    scalar.update()
+                # running_corrects += preds.eq(target.to(opt.device)).sum().item()
+            # epoch_acc = 1.0 * running_corrects / size[phase]
+            # if phase == 'train':
+            #     if opt.local_rank == 0:
+            #         print('train acc:{:.3f}'.format(epoch_acc), end=' ')
+            # else:
+            #     if opt.local_rank == 0:
+            #         print('val acc:{:.3f}'.format(epoch_acc))
         print("val{} acc: {:.5f}".format(opt.local_rank, predict(model, loader["val"], size["val"], opt.device)))
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
@@ -146,10 +166,7 @@ def mask_train(model, loader, size, criterion, scheduler, optimizer, mixup_fn, c
     return model
 
 def mask_train_model(opt, config, data_loader, data_size, is_target = True):
-    pad = "" if is_target else "_shadow"
-    pad_else = "_shadow" if is_target else ""
     model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
-    # model.load_state_dict(torch.load('../defence_model/{}/Basic{}.pth'.format(opt.dataset, pad_else)))
     model.load_state_dict(torch.load('../vit_small_patch16_224_{}.pth'.format(opt.n_class)))
     model = model.to(opt.device)
     if config.learning.DDP:
@@ -166,11 +183,12 @@ def mask_train_model(opt, config, data_loader, data_size, is_target = True):
                                       lr=config.learning.learning_rate,
                                       betas=(config.learning.beta1, config.learning.beta2),
                                       weight_decay=config.learning.weight_decay
-                                 )                             
+                                 )                         
     base_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
                                                                 T_max=config.learning.epochs,
                                                                 eta_min=config.learning.min_lr)
     model = mask_train(model, data_loader, data_size, criterion, base_scheduler, optimizer, mixup_fn, config, opt)
+    pad = "" if is_target else "_shadow"
     if config.learning.DDP or config.learning.DP:
         if opt.local_rank == 0:
             torch.save(model.module.state_dict(), '{}DP_{}{}.pth'.format(save_path[opt.dataset], opt.noise_multiplier, pad))
@@ -185,8 +203,7 @@ opt.n_class = dataset_class_dict[opt.dataset]
 config_path = config_dict[opt.dataset]
 config = MyConfig.MyConfig(path=config_path)
 opt.device = gpu_init(opt)
-print("DP dataset : {}  para: {}".format(opt.dataset, opt.noise_multiplier))
 # config.set_subkey('learning', 'epochs', 0)
-# config.set_subkey('learning', 'batch_size', 128)
+print("DP dataset : {}  para: {}".format(opt.dataset, opt.noise_multiplier))
 data_loader, data_size = get_loader(opt.dataset, config, is_target=opt.istarget)
 mask_train_model(opt, config, data_loader, data_size, is_target=opt.istarget)

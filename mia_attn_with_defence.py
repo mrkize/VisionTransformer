@@ -15,10 +15,6 @@ from vit_rollout import rollout, VITAttentionRollout
 from torch import nn
 import timm
 import csv
-from torch.cuda.amp import autocast, GradScaler
-# torch.backends.cudnn.deterministic = True
-# torch.backends.cudnn.benchmark = False
-
 
 config_dict = {'cifar10': "config/cifar10/",
                 'cifar100': "config/cifar100/",
@@ -46,8 +42,6 @@ dataset_class_dict = {
     "Fmnist": 10
 }
 
-
-random_seed = ["1001", "1101", "1333"]
 wf = open("Result.txt", "a")
 
 
@@ -80,8 +74,8 @@ def change_csv(dir, value):
         reader = csv.DictReader(file)
         rows = list(reader)
     for row in rows:
-        if row['atk'] == args.atk_method:
-            row[args.model] = round(value, 4)
+        if row['def_method'] == args.model:
+            row[args.atk_method] = round(value, 4)
 
     fieldnames = rows[0].keys()
     with open(dir, 'w', newline='') as file:
@@ -116,7 +110,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--use_cuda', action='store_true', default=True)
     parser.add_argument('--dataset', type=str, default='cifar100',help='attack dataset')
-    parser.add_argument('--model', type=str, default="Basic.pth")
+    parser.add_argument('--model', type=str, default="pbf_mask_0.000.pth")
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--num_class', type=int, default=100)
     parser.add_argument('--noise_repeat', type=int, default=1)
@@ -124,21 +118,20 @@ def get_args():
     parser.add_argument('--discard_ratio', type=float, default=0)
     parser.add_argument('--addnoise', action='store_true', default=False)
     parser.add_argument('--metric', type=str, default="cos-sim")
-    parser.add_argument('--atk_method', type=str, default="roll_nn")
+    parser.add_argument('--atk_method', type=str, default="metric_last_attn")
     parser.add_argument('--lr', type=float, default=0.004)
     parser.add_argument("--local-rank", type=int, default=0, help="number of cpu threads to use during batch generation")
     parser.add_argument('--noise_nums', type=int, default=10)
     parser.add_argument('--adaptive', action='store_true', default=False)
     parser.add_argument('--gpu', type=str, default='cuda:0')
-    parser.add_argument('--defence', type=str, default='PEdrop')
-    parser.add_argument('--shadow', type=str, default='Basic_shadow.pth')
-    parser.add_argument('--save_loader', action='store_true', default=False)
+    parser.add_argument('--defence', type=str, default='')
+    parser.add_argument('--shadow', type=str, default='')
     args = parser.parse_args()
     args.use_cuda = args.use_cuda and torch.cuda.is_available()
     return args
 
 
-class Classifier(nn.Module):
+class classifier(nn.Module):
     def __init__(self, input_dim=384, std=0.15):
         super().__init__()
         self.input_dim = input_dim
@@ -151,13 +144,13 @@ class Classifier(nn.Module):
         # torch.nn.init.normal_(self.fc2.weight.data, 0, 0.1)
         self.batch_norm2 = nn.BatchNorm1d(32)
         self.fc4 = nn.Linear(32, 2)
-        self.relu = nn.ReLU(inplace=True)
         torch.nn.init.normal_(self.fc4.weight.data, 0, std)
 
+
     def forward(self, x):
-        x = self.relu(self.fc1(x))
+        x = F.relu(self.fc1(x))
         # x = self.batch_norm1(x)
-        x = self.relu(self.fc2(x))
+        x = F.relu(self.fc2(x))
         # x = F.relu(self.fc3(x))
         x = self.batch_norm2(x)
         x = F.relu(self.fc4(x))
@@ -217,34 +210,32 @@ def switch_fused_attn(model):
 
 
 def get_tar_sha_model(args, config):
-    if args.defence != "":
-        root = "defence_model/{}/".format(args.dataset)
-        config.set_subkey('path', 'model_path', root)
-        target_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
-        target_model.load_state_dict(torch.load(config.path.model_path + args.model))
-        shadow_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
-        shadow_model.load_state_dict(torch.load(config.path.model_path + args.shadow))
+    root = "defence_model/{}/".format(args.dataset)
+    config.set_subkey('path', 'model_path', root)
+    target_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
+    target_model.load_state_dict(torch.load(config.path.model_path + args.model))
+    shadow_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
+    if args.adaptive:
+        shadow_model.load_state_dict(torch.load(config.path.model_path + args.model[:-4] + "_shadow.pth"))
     else:
-        target_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
-        target_model.load_state_dict(torch.load(config.path.model_path + args.model))
-        shadow_model = tim.create_model('vit_small_patch16_224', num_classes=args.num_class)
-        if args.adaptive:
-            shadow_model.load_state_dict(torch.load(config.path.model_path + args.model[:-4] + "_shadow.pth"))
-        elif args.shadow == "":
-            shadow_model.load_state_dict(torch.load(config.path.model_path + args.model[:-7] + "000_shadow.pth"))
+        shadow_model.load_state_dict(torch.load(config.path.model_path + "Basic_shadow.pth"))
     return target_model, shadow_model
 
 
 def init_config_model_attn(args):
-
+    config = MyConfig.MyConfig(path=config_dict[args.dataset])
+    config.set_subkey('learning', 'DP', False)
+    config.set_subkey('learning', 'DDP', False)
+    args.device = gpu_init(config, args)
+    args.num_class = dataset_class_dict[args.dataset]
     target_model, shadow_model = get_tar_sha_model(args, config)
     if "attn" in args.atk_method or "roll" in args.atk_method:
         target_model = switch_fused_attn(target_model)
         shadow_model = switch_fused_attn(shadow_model)
-    target_model, shadow_model = target_model.to(args.device), shadow_model.to(args.device)
+    # target_model, shadow_model = target_model.to(args.device), shadow_model.to(args.device)
     target_rollout = VITAttentionRollout(target_model, head_fusion=args.head_fusion, discard_ratio=args.discard_ratio, device=args.device)
     shadow_rollout = VITAttentionRollout(shadow_model, head_fusion=args.head_fusion, discard_ratio=args.discard_ratio, device=args.device)
-    return target_model, shadow_model, target_rollout, shadow_rollout
+    return config, args, target_model, shadow_model, target_rollout, shadow_rollout
 
 
 def get_attn(model, dataloaders, attention_rollout, noise=False, out_atk="out"):
@@ -373,34 +364,29 @@ def get_data(model, attention_rollout, loader, atk_method):
 
 
 def train(model, loader, size, epochs):
-    # torch.random.manual_seed(1333)
-    scalar = GradScaler()
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
-    model.to(args.device)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.5)
     since = time.time()
+    model.train()
     epoch_acc = 0
     tq = tqdm(range(epochs), ncols=100)
     for epoch in tq:
-        model.train()
         # scheduler.step()
-        running_corrects = torch.tensor(0).to(args.device)
+        running_corrects = 0
         epoch_loss = []
-        for batch_idx, (inputs, labels) in enumerate(loader):
-            inputs, labels = inputs.to(args.device), labels.to(args.device)
+        for batch_idx, (data, target) in enumerate(loader):
+            inputs, labels = data.to(args.device), target.to(args.device)
             optimizer.zero_grad()
-            with autocast():
-                outputs = model(inputs)
-                _, preds = torch.max(outputs, 1)
-                loss = criterion(outputs, labels)
-                scalar.scale(loss).backward()
-                scalar.step(optimizer)
-                scalar.update()
+            outputs = model(inputs)
+            _, preds = torch.max(outputs, 1)
+            loss = criterion(outputs, labels)
             epoch_loss.append(loss)
-            running_corrects += preds.eq(labels).sum()
+            loss.backward()
+            optimizer.step()
+            running_corrects += preds.eq(target.to(args.device)).sum().item()
         epoch_acc = 1.0 * running_corrects / size
-        tq.set_postfix({"acc":epoch_acc.item(), "loss":(sum(epoch_loss)/len(epoch_loss)).item()})
+        tq.set_postfix({"acc":epoch_acc, "loss":(sum(epoch_loss)/len(epoch_loss)).item()})
         # print("Train acc {:.5f}.".format(epoch_acc))
     time_elapsed = time.time() - since
     print("Last Training acc {:.5f}.".format(epoch_acc),end="")
@@ -410,19 +396,19 @@ def train(model, loader, size, epochs):
 
 def predict(model, loader, size):
     model.eval()
-    running_corrects = torch.tensor(0).to(args.device)
-    TP = torch.tensor(0).to(args.device)
-    FP = torch.tensor(0).to(args.device)
-    FN = torch.tensor(0).to(args.device)
-    for batch_idx, (inputs, labels) in enumerate(loader):
-        inputs, labels = inputs.to(args.device), labels.to(args.device)
+    running_corrects = 0
+    TP = 0
+    FP = 0
+    FN = 0
+    for batch_idx, (data, target) in enumerate(loader):
+        inputs, labels = data.to(args.device), target.to(args.device)
         with torch.no_grad():
             outputs = model(inputs)
-            _, preds = torch.max(outputs, 1)
-            running_corrects += preds.eq(labels).sum()
-            TP += sum((preds == 1) & (labels == 1))
-            FP += sum((preds == 0) & (labels == 1))
-            FN += sum((preds == 1) & (labels == 0))
+        _, preds = torch.max(outputs, 1)
+        running_corrects += preds.eq(target.to(args.device)).sum()
+        TP += sum((preds == 1) & (labels == 1))
+        FP += sum((preds == 0) & (labels == 1))
+        FN += sum((preds == 1) & (labels == 0))
     acc = 1.0 * running_corrects / size
     print("Val acc {:.5f}.".format(acc))
     prec = TP / (TP + FP)
@@ -430,8 +416,8 @@ def predict(model, loader, size):
     return acc.item(), prec.item(), reca.item()
 
 
-def attn_rollout_atk(args, config):
-    target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+def attn_rollout_atk(args):
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     sha_dataset, sha_target = get_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
     thr = find_best_threshold(sha_dataset, sha_target)
@@ -459,23 +445,7 @@ def get_output_data(model, attention_rollout, loader, atk_method):
     return out_loader, len(dataset)
 
 
-def get_tensor_loader(args, config, istarget):
-    target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
-    if istarget:
-        tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
-        tar_dataset, tar_target = get_data(target_model, target_rollout, tar_loader, args.atk_method)
-        val_dataset = torch.utils.data.TensorDataset(tar_dataset, tar_target)
-        loader = torch.utils.data.DataLoader(val_dataset, batch_size=256, shuffle=False)
-        # len = len(val_dataset)
-    else:
-        sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
-        sha_dataset, sha_target = get_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
-        tra_dataset = torch.utils.data.TensorDataset(sha_dataset, sha_target)
-        loader = torch.utils.data.DataLoader(tra_dataset, batch_size=256, shuffle=True)
-        # len = len(tra_dataset)
-    return loader
-
-def attn_rollout_atk_nn(args, config):
+def attn_rollout_atk_nn(args):
     ###
     args.noise_repeat = 3
     args.epochs = 25
@@ -489,37 +459,37 @@ def attn_rollout_atk_nn(args, config):
         args.noise_repeat = 3
         args.epochs = 50
         args.lr = 0.0005
-    target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     sha_dataset, sha_target = get_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
     tra_dataset = torch.utils.data.TensorDataset(sha_dataset, sha_target)
     train_loader = torch.utils.data.DataLoader(tra_dataset, batch_size=256, shuffle=True)
-    # # # # #
-    # torch.save(train_loader, "train/{}{}.pt".format(args.model, args.shadow))
+
+    # torch.save(train_loader, "pt/train{}.pt".format(args.model))
+    # # # #
+    # torch.save(train_loader, "pt/train_loader.pt")
     # torch.save(tra_dataset, "pt/tra_dataset.pt")
 
-    # train_loader = torch.load("train/{}{}.pt".format(args.model, args.shadow))
+    # train_loader = torch.load("pt/train{}.pt".format(args.model))
     # tra_dataset = torch.load("pt/tra_dataset.pt")
 
-    atk_model = Classifier(args.noise_repeat)
-    # atk_model.load_state_dict(torch.load("atk_model.pth"))
-    # torch.save(atk_model.state_dict(), "atk_model.pth")
-    atk_model = train(atk_model, train_loader, 30000, args.epochs)
-
-    # val_loader = get_tensor_loader(args, config, istarget =True)
+    atk_model = classifier(args.noise_repeat).to(args.device)
+    atk_model = train(atk_model, train_loader, len(tra_dataset), args.epochs)
 
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     tar_dataset, tar_target = get_data(target_model, target_rollout, tar_loader, args.atk_method)
     val_dataset = torch.utils.data.TensorDataset(tar_dataset, tar_target)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=256, shuffle=False)
-    # # # #
-    # torch.save(train_loader, "val/{}{}.pt".format(args.model, args.shadow))
+
+    # torch.save(train_loader, "pt/val{}.pt".format(args.model))
+    # # #
+    # torch.save(val_loader, "pt/val_loader.pt")
     # torch.save(val_dataset, "pt/val_dataset.pt")
 
-    # val_loader = torch.load("val/{}{}.pt".format(args.model, args.shadow))
+    # val_loader = torch.load("pt/val{}.pt".format(args.model))
     # val_dataset = torch.load("pt/val_dataset.pt")
 
-    acc, pre, rec = predict(atk_model, val_loader, 30000)
+    acc, pre, rec = predict(atk_model, val_loader, len(val_dataset))
     print("{}".format(args.model))
     print(acc)
     pad = "Output"
@@ -531,21 +501,21 @@ def attn_rollout_atk_nn(args, config):
     return acc, pre, rec
 
 
-def baseline_d(args, config):
+def baseline_d(args):
     if args.dataset == "cifar100":
         args.epochs = 100
         args.lr = 0.2
     else:
         args.epochs = 100
         args.lr = 0.1
-    target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     atk_train_loader, atk_loader_size = get_output_data(shadow_model, shadow_rollout, sha_loader, args.atk_method)
     # torch.save(atk_train_loader, "pt/atk_train_loader.pt")
     # torch.save(atk_loader_size, "pt/atk_loader_size.pt")
     # atk_train_loader = torch.load("pt/atk_train_loader.pt")
     # atk_loader_size = torch.load("pt/atk_loader_size.pt")
-    atk_model = Classifier().to(args.device)
+    atk_model = classifier().to(args.device)
     atk_model = train(atk_model, atk_train_loader, atk_loader_size, args.epochs)
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     atk_val_loader, val_loader_size = get_output_data(target_model, target_rollout, tar_loader, args.atk_method)
@@ -580,8 +550,8 @@ def get_sim_compare_data(model, loader):
 
 
 
-def baseline_e(args, config):
-    target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+def baseline_e(args):
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     sha_dataset, sha_target = get_sim_compare_data(shadow_model, sha_loader)
     thr = find_best_threshold(sha_dataset, sha_target)
@@ -593,8 +563,8 @@ def baseline_e(args, config):
     return val_acc
 
 
-def get_predict(args, config):
-    target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+def get_predict(args):
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     train_acc, _, _ = predict(target_model, tar_loader["train"], tar_size["train"])
     val_acc, _, _ = predict(target_model, tar_loader["val"], tar_size["val"])
@@ -602,8 +572,8 @@ def get_predict(args, config):
     return train_acc, val_acc, 0
 
 
-def get_predict_shadow(args, config):
-    target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+def get_predict_shadow(args):
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
     sha_loader, sha_size = get_loader(args.dataset, config, is_target=False)
     train_acc, _, _ = predict(shadow_model, sha_loader["train"], sha_size["train"])
     val_acc, _, _ = predict(shadow_model, sha_loader["val"], sha_size["val"])
@@ -611,9 +581,9 @@ def get_predict_shadow(args, config):
     return train_acc, val_acc, 0
 
 
-def get_metric(args, config):
-    target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
-    args.noise_repeat = 3
+def get_metric(args):
+    config, args, target_model, shadow_model, target_rollout, shadow_rollout = init_config_model_attn(args)
+    args.noise_repeat = 4
     tar_loader, tar_size = get_loader(args.dataset, config, is_target=True)
     train_res, val_res = get_data(target_model, target_rollout, tar_loader, args.atk_method)
     # torch.save(train_res, "pt/train_res.pt")
@@ -621,47 +591,23 @@ def get_metric(args, config):
     # train_res, val_res = torch.load("pt/train_res.pt"), torch.load("pt/val_res.pt")
     train_res = train_res.cpu().numpy()
     val_res = val_res.cpu().numpy()
-    torch.save(val_res, "pt/{}_{}_mem.pt".format(args.atk_method[7:], args.metric))
-    torch.save(val_res, "pt/{}_{}_nonmem.pt".format(args.atk_method[7:], args.metric))
     return train_res.max(), train_res.min(), train_res.mean(), val_res.max(), val_res.min(), val_res.mean()
 
 
-def change_csv2(dir, value):
-    rows = []
-    with open(dir, 'r') as file:
-        reader = csv.DictReader(file)
-        rows = list(reader)
-    for row in rows:
-        if row['target'] == args.model:
-            row[args.shadow] = round(value, 4)
-
-    fieldnames = rows[0].keys()
-    with open(dir, 'w', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
 torch.random.manual_seed(1333)
-# torch.cuda.manual_seed_all(1333)
 rollout_list = ["last_attn", "out", "roll"]
 args = get_args()
-config = MyConfig.MyConfig(path=config_dict[args.dataset])
-config.set_subkey('learning', 'DP', False)
-config.set_subkey('learning', 'DDP', False)
-args.device = gpu_init(config, args)
-args.num_class = dataset_class_dict[args.dataset]
 if args.atk_method in rollout_list:
-    res = attn_rollout_atk(args, config)
+    res = attn_rollout_atk(args)
 elif args.atk_method == "base_d":
-    res = baseline_d(args, config)
+    res = baseline_d(args)
 elif args.atk_method == "predict":
-    res = get_predict_shadow(args, config)
+    res = get_predict_shadow(args)
 elif "nn" in args.atk_method:
-    res = attn_rollout_atk_nn(args, config)
+    res = attn_rollout_atk_nn(args)
 elif "metric" in args.atk_method:
-    # args.model = "pbf_mask_0.000.pth"
-    res = get_metric(args, config)
+    args.model = "pbf_mask_0.000.pth"
+    res = get_metric(args)
     # print(res)
     # res = (10,20,30,40,50,60)
     dir = "metric_adp" if args.adaptive else "metric"
@@ -669,7 +615,8 @@ elif "metric" in args.atk_method:
     exit(0)
 else:
     res = 0, 0, 0
-# dir = "csv_res_adp" if args.adaptive else "csv_res"
+# res = 3.1234124, 3.1234124, 3.1234124
+dir = "csv_res_adp" if args.adaptive else "csv_res"
 # change_csv("{}/{}/acc.csv".format(dir, args.dataset), res[0])
 # change_csv("{}/{}/pre.csv".format(dir, args.dataset), res[1])
 # change_csv("{}/{}/rec.csv".format(dir, args.dataset), res[2])
@@ -679,7 +626,6 @@ else:
 # write_spilt()
 # wf.close()
 
-# dir = "confound_cifar100/{}.csv".format(args.defence)
-change_csv2("confound_cifar100/{}/acc/{}.csv".format(args.atk_method, args.defence), res[0])
-change_csv2("confound_cifar100/{}/pre/{}.csv".format(args.atk_method, args.defence), res[1])
-change_csv2("confound_cifar100/{}/rec/{}.csv".format(args.atk_method, args.defence), res[2])
+change_csv("{}/acc/{}.csv".format(dir, args.dataset), res[0])
+change_csv("{}/pre/{}.csv".format(dir, args.dataset), res[1])
+change_csv("{}/rec/{}.csv".format(dir, args.dataset), res[2])

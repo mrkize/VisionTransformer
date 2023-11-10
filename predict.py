@@ -18,21 +18,6 @@ dataset_class_dict = {
 }
 
 
-def change_csv(opt, dir, value):
-    rows = []
-    with open(dir, 'r') as file:
-        reader = csv.DictReader(file)
-        rows = list(reader)
-    for row in rows:
-        if row['def_method'] == opt.atk_method:
-            row[opt.model] = round(value, 4)
-
-    fieldnames = rows[0].keys()
-    with open(dir, 'w', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
 
 def get_opt():
     parser = argparse.ArgumentParser('argument for training')
@@ -58,6 +43,20 @@ def predict(model, dataloaders, dataset_sizes, device, is_img=False):
     acc = 1.0 * running_corrects / dataset_sizes
     return acc
 
+def change_csv(dir, value, split):
+    rows = []
+    with open(dir, 'r') as file:
+        reader = csv.DictReader(file)
+        rows = list(reader)
+    for row in rows:
+        if row['def_method'] == opt.model:
+            row[split] = round(value, 4)
+
+    fieldnames = rows[0].keys()
+    with open(dir, 'w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
 opt = get_opt()
 opt.n_class = dataset_class_dict[opt.dataset]
@@ -66,10 +65,13 @@ config_path = config_dict[opt.dataset]
 config = MyConfig.MyConfig(path=config_path)
 config.set_subkey('learning', 'DDP', False)
 config.set_subkey('learning', 'DP', False)
+config.set_subkey('learning', 'batch_size', 256)
 loader, size = get_loader(opt.dataset, config, is_target=opt.istarget)
 model = tim.create_model('vit_small_patch16_224', num_classes=opt.n_class)
-model.load_state_dict(torch.load(opt.model))
+model.load_state_dict(torch.load("defence_model/{}/".format(opt.dataset) + opt.model))
 acc = predict(model, loader["train"], size["train"], device)
-print("train acc: ", acc)
+print("{} {} train acc: {:.4f}".format(opt.dataset, opt.model, acc))
+change_csv("defence_result/{}.csv".format(opt.dataset), acc, "train_acc")
 acc = predict(model, loader["val"], size["val"], device)
-print("val acc: ", acc)
+print("{} {} val acc: {:.4f}".format(opt.dataset, opt.model, acc))
+change_csv("defence_result/{}.csv".format(opt.dataset), acc, "val_acc")
